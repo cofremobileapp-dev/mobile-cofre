@@ -1,0 +1,112 @@
+{
+  "expo": {
+    "name": "Cofre - Discover Culinary Recipes",
+    "slug": "cofre",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "description": "Discover and share amazing culinary recipes through short videos. Join Cofre community to explore delicious food recipes, cooking tutorials, and menu ideas from talented creators.",
+    "keywords": [
+      "food",
+      "recipe",
+      "cooking",
+      "culinary",
+      "video",
+      "short video",
+      "food creators",
+      "menu",
+      "restaurant",
+      "chef"
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EDE8D0"
+    },
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#EDE8D0",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Covre"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cofre.app",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cofre needs access to your camera to record cooking videos",
+        "NSPhotoLibraryUsageDescription": "Cofre needs access to your photo library to select videos for upload",
+        "NSMicrophoneUsageDescription": "Cofre needs access to your microphone to record audio for videos",
+        "NSUserNotificationsUsageDescription": "Cofre needs permission to send you notifications about likes, comments, and new followers"
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.cofre.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EDE8D0"
+      },
+      "edgeToEdgeEnabled": true,
+      "usesCleartextTraffic": false,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "cofre.app",
+              "pathPrefix": "/video"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "scheme": "cofre",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "508701b2-b716-4112-8f89-11bfe61ad1ef"
+      }
+    },
+    "_comment": "SETUP EAS: Run 'eas init' to generate real project ID. This will auto-update above.",
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#EDE8D0",
+          "mode": "production"
+        }
+      ]
+    ],
+    "owner": "ardtys",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/508701b2-b716-4112-8f89-11bfe61ad1ef"
+    }
+  }
+}

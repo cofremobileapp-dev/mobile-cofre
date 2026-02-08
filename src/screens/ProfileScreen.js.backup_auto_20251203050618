@@ -1,0 +1,898 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  StyleSheet,
+  StatusBar,
+  Image,
+  useWindowDimensions,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../contexts/AuthContext';
+import { apiService } from '../services/ApiService';
+import { useNavigation } from '@react-navigation/native';
+
+// Grid calculation constants
+const COLUMNS = 3;
+const ITEM_GAP = 1;
+
+const ProfileScreen = () => {
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const TOTAL_GAP_WIDTH = (COLUMNS - 1) * ITEM_GAP;
+  const ITEM_WIDTH = (SCREEN_WIDTH - TOTAL_GAP_WIDTH) / COLUMNS;
+  const { user, logout, isAdmin } = useAuth();
+  const navigation = useNavigation();
+  const [activeTab, setActiveTab] = useState('post');
+  const [videos, setVideos] = useState([]);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(true);
+  const [userStats, setUserStats] = useState({
+    followers: 0,
+    following: 0,
+    videos: 0,
+    likes: 0,
+  });
+
+  const styles = useMemo(() => createStyles(ITEM_WIDTH), [ITEM_WIDTH]);
+
+  // Playlists state
+  const [playlists, setPlaylists] = useState([
+    {
+      id: 1,
+      name: 'Merakyat Membumi',
+      videoCount: 2,
+      thumbnails: [
+        'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
+        'https://images.pexels.com/photos/2641886/pexels-photo-2641886.jpeg',
+      ],
+    },
+  ]);
+
+  // Edit Profile Modal States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editUsername, setEditUsername] = useState(user?.name || '');
+  const [editBio, setEditBio] = useState('');
+  const [avatarUri, setAvatarUri] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    loadUserVideos();
+  }, []);
+
+  const loadUserVideos = async () => {
+    try {
+      setIsLoadingVideos(true);
+      const response = await apiService.getMyVideos(1);
+      const videoData = response.data.data || [];
+      setVideos(videoData);
+
+      const totalLikes = videoData.reduce((sum, video) => sum + (video.likes_count || 0), 0);
+
+      setUserStats({
+        followers: user?.followers_count || 0,
+        following: user?.following_count || 0,
+        videos: videoData.length,
+        likes: totalLikes,
+      });
+    } catch (error) {
+      console.error('Error loading videos:', error);
+    } finally {
+      setIsLoadingVideos(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Apakah Anda yakin ingin keluar?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => logout()
+        }
+      ]
+    );
+  };
+
+  const handlePickAvatar = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'You need to allow access to your photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsUpdating(true);
+
+      if (avatarUri) {
+        try {
+          await apiService.uploadAvatar(avatarUri);
+        } catch (avatarError) {
+          console.error('Error uploading avatar:', avatarError);
+        }
+      }
+
+      const updateData = {
+        name: editUsername,
+        bio: editBio,
+      };
+
+      await apiService.updateProfile(updateData);
+
+      Alert.alert('Success', 'Profile berhasil diperbarui!');
+      setShowEditModal(false);
+      setAvatarUri(null);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Gagal memperbarui profile');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleCreatePlaylist = () => {
+    Alert.prompt(
+      'Create New Playlist',
+      'Enter playlist name:',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Create',
+          onPress: (playlistName) => {
+            if (playlistName && playlistName.trim()) {
+              const newPlaylist = {
+                id: playlists.length + 1,
+                name: playlistName.trim(),
+                videoCount: 0,
+                thumbnails: [],
+              };
+              setPlaylists([newPlaylist, ...playlists]);
+              Alert.alert('Success', `Playlist "${playlistName}" created!`);
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  const openEditProfileModal = () => {
+    setEditUsername(user?.name || '');
+    setEditBio(user?.bio || '');
+    setAvatarUri(null);
+    setShowEditModal(true);
+  };
+
+  const formatCount = (count) => {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
+  };
+
+  const renderVideoItem = ({ item }) => {
+    const menuData = item.menu_data || {};
+    const title = menuData.title || 'Untitled Video';
+
+    return (
+      <TouchableOpacity
+        style={styles.gridItem}
+        activeOpacity={0.8}
+        onPress={() => console.log('Play video:', item.id)}
+      >
+        <Text style={styles.videoTitle} numberOfLines={2}>
+          {title}
+        </Text>
+        <Image
+          source={{ uri: item.thumbnail_url || 'https://via.placeholder.com/200' }}
+          style={styles.videoThumbnail}
+          resizeMode="cover"
+        />
+        <View style={styles.videoStats}>
+          <View style={styles.videoStat}>
+            <Ionicons name="play" size={12} color="#666666" />
+            <Text style={styles.videoStatText}>{formatCount(item.views_count || 0)}</Text>
+          </View>
+          <View style={styles.videoStat}>
+            <Ionicons name="heart" size={12} color="#666666" />
+            <Text style={styles.videoStatText}>{formatCount(item.likes_count || 0)}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="videocam-outline" size={64} color="#CCCCCC" />
+      <Text style={styles.emptyStateText}>Belum ada video</Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F1E8" />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#000000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>@{user?.email?.split('@')[0] || 'user'}</Text>
+        <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('Notifications')}>
+          <Ionicons name="notifications-outline" size={24} color="#000000" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Profile Info Section */}
+        <View style={styles.profileSection}>
+          <View style={styles.profileHeader}>
+            {/* Avatar */}
+            <View style={styles.avatarContainer}>
+              {user?.avatar_url ? (
+                <Image source={{ uri: user.avatar_url }} style={styles.avatar} resizeMode="cover" />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{user?.name?.charAt(0).toUpperCase() || 'U'}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Username, Badge, and Stats */}
+            <View style={styles.profileInfo}>
+              {/* Username and Badge */}
+              <View style={styles.nameRow}>
+                <Text style={styles.userName}>{user?.name || 'User'}</Text>
+                {isAdmin && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>UMKM</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Stats in One Row */}
+              <View style={styles.statsRow}>
+                <Text style={styles.statText}>
+                  <Text style={styles.statValue}>{formatCount(userStats.followers)}</Text>
+                  <Text style={styles.statLabel}> Followers</Text>
+                </Text>
+                <Text style={styles.statDivider}> | </Text>
+                <Text style={styles.statText}>
+                  <Text style={styles.statValue}>{formatCount(userStats.following)}</Text>
+                  <Text style={styles.statLabel}> Following</Text>
+                </Text>
+                <Text style={styles.statDivider}> | </Text>
+                <Text style={styles.statText}>
+                  <Text style={styles.statValue}>{formatCount(userStats.videos)}</Text>
+                  <Text style={styles.statLabel}> Videos</Text>
+                </Text>
+                <Text style={styles.statDivider}> | </Text>
+                <Text style={styles.statText}>
+                  <Text style={styles.statValue}>{formatCount(userStats.likes)}</Text>
+                  <Text style={styles.statLabel}> Likes</Text>
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Bio with Location Icon */}
+          <View style={styles.bioContainer}>
+            <Ionicons name="location" size={16} color="#EF4444" />
+            <Text style={styles.bio} numberOfLines={2}>
+              {user?.bio || 'Lokasi: di mana ada makanan enak 🍔, Daily food review ⭐ Biar kamu nggak salah pilih menu'}
+            </Text>
+          </View>
+
+          {/* Edit Profile Button */}
+          <TouchableOpacity style={styles.actionButton} onPress={openEditProfileModal}>
+            <Ionicons name="create-outline" size={18} color="#000000" />
+            <Text style={styles.actionButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          {/* Logout Button (for testing) */}
+          {isAdmin && (
+            <TouchableOpacity style={[styles.actionButton, { marginTop: 8 }]} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={18} color="#000000" />
+              <Text style={styles.actionButtonText}>Logout</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Tab Bar */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'post' && styles.tabActive]}
+            onPress={() => setActiveTab('post')}
+          >
+            <Ionicons name="grid" size={24} color={activeTab === 'post' ? '#000000' : '#999999'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'repost' && styles.tabActive]}
+            onPress={() => setActiveTab('repost')}
+          >
+            <Ionicons name="repeat" size={24} color={activeTab === 'repost' ? '#000000' : '#999999'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'tag' && styles.tabActive]}
+            onPress={() => setActiveTab('tag')}
+          >
+            <Ionicons name="pricetag" size={24} color={activeTab === 'tag' ? '#000000' : '#999999'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'playlist' && styles.tabActive]}
+            onPress={() => setActiveTab('playlist')}
+          >
+            <Ionicons name="list" size={24} color={activeTab === 'playlist' ? '#000000' : '#999999'} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Content */}
+        {isLoadingVideos ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#000000" />
+          </View>
+        ) : activeTab === 'playlist' ? (
+          <View style={styles.playlistContainer}>
+            {/* Create New Playlist Button */}
+            <TouchableOpacity style={styles.createPlaylistButton} onPress={handleCreatePlaylist}>
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+              <Text style={styles.createPlaylistText}>Create New Playlist</Text>
+            </TouchableOpacity>
+
+            {/* Playlists List */}
+            {playlists.map((playlist) => (
+              <TouchableOpacity
+                key={playlist.id}
+                style={styles.playlistItem}
+                onPress={() => Alert.alert('Playlist', `Open: ${playlist.name}`)}
+              >
+                {/* Playlist Icon */}
+                <View style={styles.playlistIcon}>
+                  <Ionicons name="albums" size={24} color="#06402B" />
+                </View>
+
+                {/* Playlist Info */}
+                <View style={styles.playlistInfo}>
+                  <Text style={styles.playlistName}>{playlist.name}</Text>
+                  <Text style={styles.playlistVideoCount}>{playlist.videoCount} videos</Text>
+                </View>
+
+                {/* Playlist Thumbnails */}
+                {playlist.thumbnails.length > 0 && (
+                  <View style={styles.playlistThumbnails}>
+                    {playlist.thumbnails.slice(0, 2).map((thumbnail, index) => (
+                      <Image
+                        key={index}
+                        source={{ uri: thumbnail }}
+                        style={styles.playlistThumbnail}
+                        resizeMode="cover"
+                      />
+                    ))}
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : activeTab === 'post' && videos.length > 0 ? (
+          <View style={styles.gridContainer}>
+            {videos.map((item, index) => (
+              <View key={item.id || index}>{renderVideoItem({ item })}</View>
+            ))}
+          </View>
+        ) : (
+          renderEmptyState()
+        )}
+      </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal visible={showEditModal} animationType="slide" transparent={true} onRequestClose={() => setShowEditModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.editModalContainer}>
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#000000" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.editModalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.avatarSection}>
+                <TouchableOpacity style={styles.avatarEditContainer} onPress={handlePickAvatar}>
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                  ) : user?.avatar_url ? (
+                    <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarPlaceholderText}>{editUsername?.charAt(0).toUpperCase() || 'U'}</Text>
+                    </View>
+                  )}
+                  <View style={styles.avatarUploadIcon}>
+                    <Ionicons name="camera" size={20} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+                <Text style={styles.avatarHintText}>Tap to change photo</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Username</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editUsername}
+                  onChangeText={setEditUsername}
+                  placeholder="Enter your username"
+                  placeholderTextColor="#999999"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Bio</Text>
+                <TextInput
+                  style={[styles.textInput, styles.bioInput]}
+                  value={editBio}
+                  onChangeText={(text) => {
+                    if (text.length <= 150) setEditBio(text);
+                  }}
+                  placeholder="Tell people about yourself..."
+                  placeholderTextColor="#999999"
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+                <Text style={styles.charCounter}>{editBio.length}/150</Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setShowEditModal(false)}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveButton, isUpdating && styles.saveButtonDisabled]}
+                  onPress={handleSaveProfile}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const createStyles = (ITEM_WIDTH) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F1E8',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F5F1E8',
+  },
+  headerButton: {
+    padding: 4,
+    width: 40,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  profileSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: '#F5F1E8',
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  avatarContainer: {
+    marginRight: 12,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: '#FFB800',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  profileInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  userName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  badge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  statText: {
+    fontSize: 12,
+  },
+  statValue: {
+    fontWeight: '600',
+    color: '#000000',
+  },
+  statLabel: {
+    color: '#6B7280',
+  },
+  statDivider: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  bioContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginBottom: 12,
+    paddingTop: 4,
+  },
+  bio: {
+    flex: 1,
+    fontSize: 12,
+    color: '#374151',
+    lineHeight: 18,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#CCCCCC',
+    borderRadius: 4,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F5F1E8',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: '#000000',
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    backgroundColor: '#F5F1E8',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#F5F1E8',
+    gap: ITEM_GAP,
+  },
+  gridItem: {
+    width: ITEM_WIDTH,
+    backgroundColor: '#FFFFFF',
+  },
+  videoTitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#000000',
+    padding: 6,
+    paddingBottom: 4,
+  },
+  videoThumbnail: {
+    width: '100%',
+    height: ITEM_WIDTH * 1.2,
+    backgroundColor: '#E0E0E0',
+  },
+  videoStats: {
+    flexDirection: 'row',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  videoStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  videoStatText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#666666',
+  },
+  emptyState: {
+    paddingVertical: 100,
+    alignItems: 'center',
+    backgroundColor: '#F5F1E8',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#999999',
+    marginTop: 16,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  editModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  editModalContent: {
+    padding: 20,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  avatarEditContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarPlaceholderText: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  avatarUploadIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  avatarHintText: {
+    fontSize: 12,
+    color: '#666666',
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#000000',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  bioInput: {
+    minHeight: 100,
+    paddingTop: 12,
+  },
+  charCounter: {
+    fontSize: 12,
+    color: '#999999',
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Playlist Styles
+  playlistContainer: {
+    padding: 16,
+    backgroundColor: '#F5F1E8',
+  },
+  createPlaylistButton: {
+    backgroundColor: '#06402B',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 8,
+  },
+  createPlaylistText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  playlistItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  playlistIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#EDE8D0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  playlistInfo: {
+    flex: 1,
+  },
+  playlistName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  playlistVideoCount: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  playlistThumbnails: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  playlistThumbnail: {
+    width: 50,
+    height: 50,
+    borderRadius: 6,
+    backgroundColor: '#E5E5E5',
+  },
+});
+
+export default ProfileScreen;
