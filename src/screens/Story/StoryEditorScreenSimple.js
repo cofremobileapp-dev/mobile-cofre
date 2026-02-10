@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   TextInput,
   ScrollView,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +28,7 @@ const StoryEditorScreenSimple = ({ route }) => {
   const [textStyle, setTextStyle] = useState('classic');
   const [textSize, setTextSize] = useState(24);
   const [textElements, setTextElements] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Text styles
   const textStyles = [
@@ -49,12 +52,19 @@ const StoryEditorScreenSimple = ({ route }) => {
     '#00D4FF', // Cyan
   ];
 
-  // Add text element
+  // Add text element - position at CENTER of visible area (above toolbar)
   const handleAddText = () => {
     if (!textInput.trim()) {
       Alert.alert('Error', 'Please enter some text');
       return;
     }
+
+    // Calculate center position - account for top bar (90px) and bottom toolbar (50% max)
+    // Visible area is roughly from y=100 to y=SCREEN_HEIGHT*0.5
+    const visibleTop = 100;
+    const visibleBottom = SCREEN_HEIGHT * 0.5;
+    const centerY = (visibleTop + visibleBottom) / 2;
+    const centerX = SCREEN_WIDTH / 2;
 
     const newTextElement = {
       id: Date.now().toString(),
@@ -62,12 +72,91 @@ const StoryEditorScreenSimple = ({ route }) => {
       color: selectedColor,
       style: textStyle,
       size: textSize,
-      x: SCREEN_WIDTH / 2,
-      y: SCREEN_HEIGHT / 3,
+      x: centerX,
+      y: centerY,
     };
 
+    console.log('📝 [StoryEditor] Adding text at position:', { x: centerX, y: centerY });
     setTextElements([...textElements, newTextElement]);
     setTextInput('');
+  };
+
+  // Draggable Text Component
+  const DraggableTextElement = ({ element, onDelete, onUpdatePosition }) => {
+    const pan = useRef(new Animated.ValueXY({ x: element.x, y: element.y })).current;
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          setIsDragging(true);
+          pan.setOffset({
+            x: pan.x._value,
+            y: pan.y._value,
+          });
+          pan.setValue({ x: 0, y: 0 });
+        },
+        onPanResponderMove: Animated.event(
+          [null, { dx: pan.x, dy: pan.y }],
+          { useNativeDriver: false }
+        ),
+        onPanResponderRelease: () => {
+          pan.flattenOffset();
+          setIsDragging(false);
+          // Update element position
+          onUpdatePosition(element.id, pan.x._value, pan.y._value);
+        },
+      })
+    ).current;
+
+    const textStyleProps = getTextStyleProps(element.style);
+
+    return (
+      <Animated.View
+        style={[
+          styles.draggableTextWrapper,
+          {
+            transform: [
+              { translateX: pan.x },
+              { translateY: pan.y },
+            ],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.textElementBox}>
+          <Text
+            style={[
+              styles.textElementText,
+              {
+                color: element.color,
+                fontSize: element.size,
+                ...textStyleProps,
+              },
+            ]}
+          >
+            {element.text}
+          </Text>
+          <TouchableOpacity
+            style={styles.deleteTextButton}
+            onPress={() => onDelete(element.id)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="close-circle" size={24} color="#FF3B5C" />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  // Update text element position
+  const updateTextPosition = (id, x, y) => {
+    setTextElements(prev =>
+      prev.map(el =>
+        el.id === id ? { ...el, x, y } : el
+      )
+    );
   };
 
   // Delete text element
@@ -124,38 +213,15 @@ const StoryEditorScreenSimple = ({ route }) => {
         )}
       </View>
 
-      {/* Text Elements Overlay */}
-      <View style={styles.textElementsContainer} pointerEvents="auto">
+      {/* Text Elements Overlay - Draggable */}
+      <View style={styles.textElementsContainer} pointerEvents="box-none">
         {textElements.map((element) => (
-          <View
+          <DraggableTextElement
             key={element.id}
-            style={[
-              styles.textElementWrapper,
-              {
-                left: element.x - 100,
-                top: element.y - 30,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.textElementText,
-                {
-                  color: element.color,
-                  fontSize: element.size,
-                  ...getTextStyleProps(element.style),
-                },
-              ]}
-            >
-              {element.text}
-            </Text>
-            <TouchableOpacity
-              style={styles.deleteTextButton}
-              onPress={() => handleDeleteText(element.id)}
-            >
-              <Ionicons name="close-circle" size={24} color="#FF3B5C" />
-            </TouchableOpacity>
-          </View>
+            element={element}
+            onDelete={handleDeleteText}
+            onUpdatePosition={updateTextPosition}
+          />
         ))}
       </View>
 
@@ -334,6 +400,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 100,
+  },
+  draggableTextWrapper: {
+    position: 'absolute',
+    zIndex: 101,
+  },
+  textElementBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderStyle: 'dashed',
+    minWidth: 80,
+    alignItems: 'center',
   },
   textElementWrapper: {
     position: 'absolute',
@@ -342,16 +423,25 @@ const styles = StyleSheet.create({
   textElementText: {
     textAlign: 'center',
     fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 4,
   },
   deleteTextButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: -12,
+    right: -12,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
   },
   textInput: {
     backgroundColor: '#1F2937',

@@ -37,6 +37,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   const [commentsCount, setCommentsCount] = useState(item.comments_count || 0);
   const [isFollowing, setIsFollowing] = useState(item.is_following || false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [isRepostLoading, setIsRepostLoading] = useState(false);
   const hasRecordedView = useRef(false);
 
   const videoItemStyles = useMemo(() => createVideoItemStyles(SCREEN_HEIGHT, SCREEN_WIDTH), [SCREEN_HEIGHT, SCREEN_WIDTH]);
@@ -150,6 +151,9 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   };
 
   const handleRepost = async () => {
+    if (isRepostLoading) return; // Prevent multiple rapid clicks
+
+    setIsRepostLoading(true);
     const previousState = isReposted;
 
     // Optimistic update
@@ -157,8 +161,8 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
     try {
       let response;
-      if (isReposted) {
-        // Undo repost
+      if (previousState) {
+        // Undo repost - use previousState instead of isReposted for correct logic
         response = await apiService.undoRepost(item.id);
       } else {
         // Create repost
@@ -167,12 +171,17 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
       // Update with actual value from server if provided
       if (response.data?.reposted !== undefined) {
         setIsReposted(response.data.reposted);
+      } else {
+        // If server doesn't return reposted status, use the expected value
+        setIsReposted(!previousState);
       }
     } catch (error) {
       // Revert on error
       setIsReposted(previousState);
       const errorMessage = error.response?.data?.message || 'Gagal memposting ulang video';
       Alert.alert('Error', errorMessage);
+    } finally {
+      setIsRepostLoading(false);
     }
   };
 
@@ -198,38 +207,46 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   };
 
   const handleFollow = async () => {
-    const targetUserId = item.user?.id;
-
-    // Prevent crash if user data is missing
-    if (!targetUserId) {
-      console.error('Follow error: Missing target user ID');
-      return;
-    }
-
-    // Prevent following yourself
-    if (Number(targetUserId) === Number(currentUserId)) {
-      Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
-      return;
-    }
-
-    if (isFollowLoading) return;
-
-    setIsFollowLoading(true);
-    const previousState = isFollowing;
-
-    // Optimistic update
-    setIsFollowing(!isFollowing);
-
     try {
+      const targetUserId = item.user?.id;
+
+      // Prevent crash if user data is missing
+      if (!targetUserId) {
+        console.error('Follow error: Missing target user ID');
+        return;
+      }
+
+      // Prevent following yourself
+      if (Number(targetUserId) === Number(currentUserId)) {
+        Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
+        return;
+      }
+
+      if (isFollowLoading) return;
+
+      setIsFollowLoading(true);
+      const previousState = isFollowing;
+
+      // Optimistic update - always set to true when follow button is pressed
+      setIsFollowing(true);
+
       const response = await apiService.toggleFollow(targetUserId);
-      setIsFollowing(response.data.following);
+
+      // Ensure we get a valid response
+      if (response && response.data) {
+        setIsFollowing(response.data.following === true);
+      } else {
+        // Assume follow was successful if no error
+        setIsFollowing(true);
+      }
     } catch (error) {
       // Revert on error
-      setIsFollowing(previousState);
+      setIsFollowing(false);
+      console.error('Follow error:', error);
 
       // Handle specific error messages
-      const errorMessage = error.response?.data?.message || error.message;
-      if (errorMessage === 'You cannot follow yourself') {
+      const errorMessage = error.response?.data?.message || error.message || '';
+      if (errorMessage.toLowerCase().includes('cannot follow yourself')) {
         Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
       } else {
         Alert.alert('Error', 'Gagal mengikuti pengguna. Silakan coba lagi.');

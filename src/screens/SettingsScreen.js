@@ -750,7 +750,8 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
   },
   modalScrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 150,
+    flexGrow: 1,
   },
   modalHeader: {
     flexDirection: 'row',

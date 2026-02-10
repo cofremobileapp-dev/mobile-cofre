@@ -20,20 +20,29 @@ class ApiService {
     // Request Interceptor - Add auth token to all requests
     this.api.interceptors.request.use(
       async (config) => {
+        console.log(`📤 [API] ${config.method?.toUpperCase()} ${config.url}`);
         if (this.authToken) {
           config.headers.Authorization = `Bearer ${this.authToken}`;
+          console.log('📤 [API] Auth token attached');
+        } else {
+          console.log('📤 [API] No auth token');
         }
         return config;
       },
       (error) => {
+        console.error('📤 [API] Request error:', error.message);
         return Promise.reject(error);
       }
     );
 
     // Response Interceptor - SIMPLIFIED FOR DEADLINE (No Refresh Token)
     this.api.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log(`📥 [API] ${response.config?.method?.toUpperCase()} ${response.config?.url} - ${response.status}`);
+        return response;
+      },
       async (error) => {
+        console.error(`📥 [API] Error: ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response?.status || error.code}`);
         const originalRequest = error.config;
 
         // Handle 401 Unauthorized - Token invalid/expired
@@ -568,6 +577,84 @@ class ApiService {
 
   async reportStory(storyId, data) {
     return this.post(`/stories/${storyId}/report`, data);
+  }
+
+  // ==================== Story Additional Methods ====================
+
+  async getArchivedStories() {
+    return this.get('/stories/archived');
+  }
+
+  async archiveStory(storyId) {
+    return this.post(`/stories/${storyId}/archive`);
+  }
+
+  async unarchiveStory(storyId) {
+    return this.post(`/stories/${storyId}/unarchive`);
+  }
+
+  async getStoryViewers(storyId) {
+    return this.get(`/stories/${storyId}/viewers`);
+  }
+
+  async replyToStory(storyId, message) {
+    return this.post(`/stories/${storyId}/reply`, { message });
+  }
+
+  async reactToStory(storyId, emoji) {
+    return this.post(`/stories/${storyId}/react`, { emoji });
+  }
+
+  async shareStory(storyId) {
+    return this.post(`/stories/${storyId}/share`);
+  }
+
+  // ==================== Highlights Methods ====================
+
+  async getHighlights() {
+    return this.get('/highlights');
+  }
+
+  async getHighlightDetails(highlightId) {
+    return this.get(`/highlights/${highlightId}`);
+  }
+
+  async createHighlight(data) {
+    return this.post('/highlights', data);
+  }
+
+  async updateHighlight(highlightId, data) {
+    return this.put(`/highlights/${highlightId}`, data);
+  }
+
+  async deleteHighlight(highlightId) {
+    return this.delete(`/highlights/${highlightId}`);
+  }
+
+  async addStoryToHighlight(highlightId, storyId) {
+    return this.post(`/highlights/${highlightId}/stories`, { story_id: storyId });
+  }
+
+  async removeStoryFromHighlight(highlightId, storyId) {
+    return this.delete(`/highlights/${highlightId}/stories/${storyId}`);
+  }
+
+  async reorderHighlights(highlightIds) {
+    return this.post('/highlights/reorder', { highlight_ids: highlightIds });
+  }
+
+  // ==================== Email Verification & Password Reset ====================
+
+  async resendVerificationEmail() {
+    return this.post('/email/verification-notification');
+  }
+
+  async forgotPassword(email) {
+    return this.post('/forgot-password', { email });
+  }
+
+  async resetPassword(data) {
+    return this.post('/reset-password', data);
   }
 }
 

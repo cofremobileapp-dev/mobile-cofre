@@ -286,6 +286,81 @@ class ApiWrapper {
     return apiService.checkHealth();
   }
 
+  // Story Additional Methods
+  async getArchivedStories() {
+    return apiService.getArchivedStories();
+  }
+
+  async archiveStory(storyId) {
+    return apiService.archiveStory(storyId);
+  }
+
+  async unarchiveStory(storyId) {
+    return apiService.unarchiveStory(storyId);
+  }
+
+  async getStoryViewers(storyId) {
+    return apiService.getStoryViewers(storyId);
+  }
+
+  async replyToStory(storyId, message) {
+    return apiService.replyToStory(storyId, message);
+  }
+
+  async reactToStory(storyId, emoji) {
+    return apiService.reactToStory(storyId, emoji);
+  }
+
+  async shareStory(storyId) {
+    return apiService.shareStory(storyId);
+  }
+
+  // Highlights Methods
+  async getHighlights() {
+    return apiService.getHighlights();
+  }
+
+  async getHighlightDetails(highlightId) {
+    return apiService.getHighlightDetails(highlightId);
+  }
+
+  async createHighlight(data) {
+    return apiService.createHighlight(data);
+  }
+
+  async updateHighlight(highlightId, data) {
+    return apiService.updateHighlight(highlightId, data);
+  }
+
+  async deleteHighlight(highlightId) {
+    return apiService.deleteHighlight(highlightId);
+  }
+
+  async addStoryToHighlight(highlightId, storyId) {
+    return apiService.addStoryToHighlight(highlightId, storyId);
+  }
+
+  async removeStoryFromHighlight(highlightId, storyId) {
+    return apiService.removeStoryFromHighlight(highlightId, storyId);
+  }
+
+  async reorderHighlights(highlightIds) {
+    return apiService.reorderHighlights(highlightIds);
+  }
+
+  // Email Verification & Password Reset
+  async resendVerificationEmail() {
+    return apiService.resendVerificationEmail();
+  }
+
+  async forgotPassword(email) {
+    return apiService.forgotPassword(email);
+  }
+
+  async resetPassword(data) {
+    return apiService.resetPassword(data);
+  }
+
   // Utility methods
   setAuthToken(token) {
     apiService.setAuthToken(token);

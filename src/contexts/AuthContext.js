@@ -42,23 +42,32 @@ export const AuthProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
+      console.log('🔐 [AuthContext] Loading stored auth...');
       const storedToken = await secureStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       const storedUser = await secureStorage.getItem(STORAGE_KEYS.USER_DATA);
 
+      console.log('🔐 [AuthContext] Token found:', !!storedToken);
+      console.log('🔐 [AuthContext] User found:', !!storedUser);
+
       if (storedToken && storedUser) {
         const parsedUser = JSON.parse(storedUser);
+        console.log('🔐 [AuthContext] Parsed user:', parsedUser.email || parsedUser.name);
         setToken(storedToken);
         setUser(parsedUser);
         setIsAdmin(parsedUser.role === 'admin' || parsedUser.is_admin === true);
         apiService.setAuthToken(storedToken);
+        console.log('🔐 [AuthContext] Auth token set in ApiService');
 
         // Register for push notifications
         await registerPushNotificationToken();
+      } else {
+        console.log('🔐 [AuthContext] No stored auth found, user needs to login');
       }
     } catch (error) {
-      // Silently handle error
+      console.error('❌ [AuthContext] Error loading stored auth:', error);
     } finally {
       setIsLoading(false);
+      console.log('🔐 [AuthContext] Auth loading complete');
     }
   };
 
@@ -138,11 +147,13 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      console.log('🔐 [AuthContext] Attempting login for:', email);
       const response = await apiService.post('/login', {
         email,
         password,
       });
 
+      console.log('🔐 [AuthContext] Login response received');
       const { user: userData, token: authToken } = response.data;
 
       // Store auth data securely (only access token)
@@ -153,12 +164,19 @@ export const AuthProvider = ({ children }) => {
       setToken(authToken);
       setUser(userData);
       setIsAdmin(userData.role === 'admin' || userData.is_admin === true);
+      console.log('✅ [AuthContext] Login successful for:', userData.email || userData.name);
 
       // Register for push notifications after successful login
       await registerPushNotificationToken();
 
       return { success: true };
     } catch (error) {
+      console.error('❌ [AuthContext] Login failed:', error.message);
+      console.error('❌ [AuthContext] Error details:', JSON.stringify({
+        status: error.response?.status,
+        data: error.response?.data,
+        code: error.code,
+      }));
       return {
         success: false,
         error: extractErrorMessage(error, 'Login gagal. Silakan coba lagi.'),

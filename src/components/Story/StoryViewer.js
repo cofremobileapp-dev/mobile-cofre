@@ -471,33 +471,50 @@ const StoryViewer = ({
                 ? JSON.parse(currentStory.text_elements)
                 : currentStory.text_elements;
 
-              return Array.isArray(textElements) && textElements.map((element, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.textElementOverlay,
-                    {
-                      left: element.x || SCREEN_WIDTH / 2 - 100,
-                      top: element.y || SCREEN_HEIGHT / 2 - 50,
-                    },
-                  ]}
-                >
-                  <Text
+              console.log('📝 [StoryViewer] Rendering text elements:', textElements);
+
+              return Array.isArray(textElements) && textElements.map((element, idx) => {
+                // Use percentage-based position if available, otherwise use absolute
+                let posX, posY;
+                if (element.xPercent !== undefined && element.yPercent !== undefined) {
+                  posX = (element.xPercent / 100) * SCREEN_WIDTH;
+                  posY = (element.yPercent / 100) * SCREEN_HEIGHT;
+                } else {
+                  // Fallback to stored x,y or center
+                  posX = element.x || SCREEN_WIDTH / 2;
+                  posY = element.y || SCREEN_HEIGHT / 3;
+                }
+
+                return (
+                  <View
+                    key={idx}
                     style={[
-                      styles.overlayText,
+                      styles.textElementOverlay,
                       {
-                        color: element.color || '#FFFFFF',
-                        textAlign: element.align || 'center',
-                        fontWeight: element.style === 'bold' ? 'bold' : 'normal',
-                        fontStyle: element.style === 'italic' ? 'italic' : 'normal',
-                        backgroundColor: element.backgroundColor || 'transparent',
+                        left: posX,
+                        top: posY,
+                        transform: [{ translateX: -50 }], // Center the text
                       },
                     ]}
                   >
-                    {element.text}
-                  </Text>
-                </View>
-              ));
+                    <Text
+                      style={[
+                        styles.overlayText,
+                        {
+                          color: element.color || '#FFFFFF',
+                          textAlign: element.align || 'center',
+                          fontWeight: element.style === 'bold' || element.style === 'strong' ? 'bold' : 'normal',
+                          fontStyle: element.style === 'italic' ? 'italic' : 'normal',
+                          backgroundColor: element.backgroundColor || 'transparent',
+                          fontSize: element.size || 24,
+                        },
+                      ]}
+                    >
+                      {element.text}
+                    </Text>
+                  </View>
+                );
+              });
             } catch (e) {
               console.error('Error parsing text elements:', e);
               return null;

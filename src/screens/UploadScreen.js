@@ -85,12 +85,31 @@ const UploadScreen = () => {
     setIsLoadingPlaylists(true);
     try {
       const response = await apiService.getPlaylists();
-      const playlistData = response.data?.data || response.data;
-      if (playlistData && Array.isArray(playlistData)) {
+      console.log('📂 [UploadScreen] Playlists API response:', JSON.stringify(response.data, null, 2));
+
+      // Handle various response formats
+      let playlistData = [];
+      if (response.data?.success && response.data?.data) {
+        // Format: { success: true, data: [...] }
+        playlistData = response.data.data;
+      } else if (response.data?.data) {
+        // Format: { data: [...] }
+        playlistData = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        // Format: [...]
+        playlistData = response.data;
+      }
+
+      if (Array.isArray(playlistData)) {
+        console.log('📂 [UploadScreen] Loaded playlists:', playlistData.length);
         setPlaylists(playlistData);
+      } else {
+        console.log('📂 [UploadScreen] No playlists found or invalid format');
+        setPlaylists([]);
       }
     } catch (error) {
       console.error('Error loading playlists:', error);
+      setPlaylists([]);
     } finally {
       setIsLoadingPlaylists(false);
     }
@@ -1247,6 +1266,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
+    zIndex: 9999,
+    elevation: 10,
   },
   tagUsersSectionHeader: {
     flexDirection: 'row',

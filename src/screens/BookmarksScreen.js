@@ -19,6 +19,7 @@ import { apiService } from '../services/ApiService';
 import { useAuth } from '../contexts/AuthContext';
 import StoryBar from '../components/Story/StoryBar';
 import StoryViewer from '../components/Story/StoryViewer';
+import VideoPreviewModal from '../components/VideoPreviewModal';
 import useStories from '../hooks/useStories';
 
 const BookmarksScreen = ({ navigation }) => {
@@ -38,6 +39,10 @@ const BookmarksScreen = ({ navigation }) => {
   const { stories, loading: storiesLoading, fetchStories } = useStories();
   const [showStoryViewer, setShowStoryViewer] = useState(false);
   const [selectedStoryIndex, setSelectedStoryIndex] = useState(0);
+
+  // Video Preview Modal state
+  const [showVideoPreview, setShowVideoPreview] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   // Debug: Track story viewer state changes
   useEffect(() => {
@@ -144,9 +149,18 @@ const BookmarksScreen = ({ navigation }) => {
   };
 
   const handleVideoPress = (video) => {
-    // Navigate to video detail or open in home feed
-    // For now, show an alert - you can implement navigation later
-    Alert.alert('Video', `Video: ${video.menu_data?.name || 'Untitled'}`);
+    // Show video preview modal directly
+    setSelectedVideo(video);
+    setShowVideoPreview(true);
+  };
+
+  const handleVideoPreviewClose = (wasDeleted) => {
+    setShowVideoPreview(false);
+    setSelectedVideo(null);
+    if (wasDeleted) {
+      // Refresh bookmarks if a video was deleted
+      loadBookmarks(1);
+    }
   };
 
   const handleToggleBookmark = async (videoId) => {
@@ -372,6 +386,14 @@ const BookmarksScreen = ({ navigation }) => {
         initialIndex={selectedStoryIndex}
         onClose={() => setShowStoryViewer(false)}
         onStoryChange={(index) => setSelectedStoryIndex(index)}
+      />
+
+      {/* Video Preview Modal */}
+      <VideoPreviewModal
+        visible={showVideoPreview}
+        video={selectedVideo}
+        onClose={handleVideoPreviewClose}
+        currentUserId={user?.id}
       />
     </View>
   );

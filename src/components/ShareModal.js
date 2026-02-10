@@ -232,7 +232,11 @@ const ShareModal = ({ visible, onClose, video, onRepostSuccess }) => {
   const handleShareToFriend = async (friend) => {
     try {
       await apiService.shareToFriend(video.id, friend.id);
-      Alert.alert('Sukses', `Video berhasil dikirim ke ${friend.name}`);
+      Alert.alert(
+        'Terkirim!',
+        `Video berhasil dikirim ke ${friend.name}.\n\n${friend.name} akan menerima notifikasi dan dapat melihat video ini di halaman notifikasi mereka.`,
+        [{ text: 'OK' }]
+      );
       onClose();
     } catch (error) {
       console.error('Error sharing to friend:', error);
@@ -247,40 +251,76 @@ const ShareModal = ({ visible, onClose, video, onRepostSuccess }) => {
         : video.menu_data || {};
       const menuName = menuData.name || 'Video Kuliner';
       const userName = video.user?.name || 'Unknown';
-      const message = `Lihat video resep ${menuName} dari @${userName} di Cofre!`;
 
-      let url = '';
+      // Create share message with app download link
+      const appLink = 'https://expo.dev/@ardtys/cofre'; // Replace with actual app store link when published
+      const message = `🍽️ Lihat video resep "${menuName}" dari @${userName} di Cofre!\n\n📲 Download Cofre: ${appLink}`;
 
-      switch (appName) {
-        case 'whatsapp':
-          url = `whatsapp://send?text=${encodeURIComponent(message)}`;
-          break;
-        case 'instagram':
-          // Instagram doesn't support direct sharing via URL
-          Alert.alert('Instagram', 'Silakan bagikan melalui menu share native');
-          return;
-        case 'facebook':
-          url = `fb://facewebmodal/f?href=${encodeURIComponent(message)}`;
-          break;
-        case 'telegram':
-          url = `tg://msg?text=${encodeURIComponent(message)}`;
-          break;
-        case 'twitter':
-          url = `twitter://post?message=${encodeURIComponent(message)}`;
-          break;
-        case 'tiktok':
-          Alert.alert('TikTok', 'Silakan bagikan melalui menu share native');
-          return;
-        default:
-          return;
-      }
+      // Use native share for all apps - this is more reliable
+      if (appName === 'native' || appName === 'whatsapp' || appName === 'instagram' || appName === 'facebook' || appName === 'telegram' || appName === 'tiktok') {
+        const isAvailable = await Sharing.isAvailableAsync();
 
-      const canOpen = await Linking.canOpenURL(url);
-      if (canOpen) {
-        await Linking.openURL(url);
-        onClose();
-      } else {
-        Alert.alert('Error', `Aplikasi ${appName} tidak terinstall di perangkat Anda`);
+        if (isAvailable && video?.s3_url) {
+          // Download video first for sharing with media
+          try {
+            const fileName = `cofre_${Date.now()}.mp4`;
+            const fileUri = FileSystem.cacheDirectory + fileName;
+
+            Alert.alert('Mempersiapkan...', 'Mengunduh video untuk dibagikan...');
+
+            const downloadResult = await FileSystem.downloadAsync(video.s3_url, fileUri);
+
+            if (downloadResult.status === 200) {
+              await Sharing.shareAsync(downloadResult.uri, {
+                mimeType: 'video/mp4',
+                dialogTitle: 'Bagikan Video',
+                UTI: 'public.movie',
+              });
+              onClose();
+              return;
+            }
+          } catch (downloadError) {
+            console.log('Video download failed, sharing text only:', downloadError);
+          }
+        }
+
+        // Fallback to text sharing via URL schemes
+        let url = '';
+        switch (appName) {
+          case 'whatsapp':
+            url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+            break;
+          case 'telegram':
+            url = `tg://msg?text=${encodeURIComponent(message)}`;
+            break;
+          case 'twitter':
+            url = `twitter://post?message=${encodeURIComponent(message)}`;
+            break;
+          default:
+            // Use native share dialog
+            if (isAvailable) {
+              await Sharing.shareAsync(video?.s3_url || '', {
+                dialogTitle: message,
+              });
+            } else {
+              Alert.alert('Info', message);
+            }
+            onClose();
+            return;
+        }
+
+        const canOpen = await Linking.canOpenURL(url);
+        if (canOpen) {
+          await Linking.openURL(url);
+          onClose();
+        } else {
+          // Fallback: copy message to clipboard or show in alert
+          Alert.alert(
+            'Aplikasi Tidak Ditemukan',
+            `${appName} tidak terinstall. Pesan untuk dibagikan:\n\n${message}`,
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error(`Error sharing to ${appName}:`, error);

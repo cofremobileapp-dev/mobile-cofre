@@ -134,7 +134,9 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
 
   const renderComment = ({ item }) => {
     // Only show delete button if comment belongs to current user
-    const isOwnComment = user?.id && item.user_id && Number(user.id) === Number(item.user_id);
+    // Check both item.user_id and item.user?.id for compatibility
+    const commentUserId = item.user_id || item.user?.id;
+    const isOwnComment = user?.id && commentUserId && Number(user.id) === Number(commentUserId);
 
     return (
       <View style={styles.commentItem}>

@@ -56,21 +56,46 @@ export const useStories = () => {
       setLoading(true);
       setError(null);
 
+      console.log('📤 [useStories] Starting story upload:', {
+        mediaUri: mediaUri?.substring(0, 50) + '...',
+        mediaType,
+        options: { ...options, text_elements: options.text_elements ? 'present' : 'none' },
+      });
+
       // Create FormData
       const formData = new FormData();
 
-      // Get file extension
-      const uriParts = mediaUri.split('.');
-      const fileExtension = uriParts[uriParts.length - 1];
+      // Get file extension - handle various URI formats
+      let fileExtension = 'jpg';
+      if (mediaUri) {
+        const uriParts = mediaUri.split('.');
+        if (uriParts.length > 1) {
+          fileExtension = uriParts[uriParts.length - 1].split('?')[0]; // Remove query params
+        }
+      }
+
+      // Determine MIME type based on media type
+      let mimeType = 'image/jpeg';
+      if (mediaType === 'video') {
+        mimeType = 'video/mp4';
+        if (fileExtension === 'mov') mimeType = 'video/quicktime';
+        if (fileExtension === 'avi') mimeType = 'video/x-msvideo';
+      } else {
+        if (fileExtension === 'png') mimeType = 'image/png';
+        if (fileExtension === 'gif') mimeType = 'image/gif';
+        if (fileExtension === 'webp') mimeType = 'image/webp';
+      }
+
+      console.log('📤 [useStories] File info:', { fileExtension, mimeType });
 
       formData.append('media', {
         uri: mediaUri,
-        type: mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
+        type: mimeType,
         name: `story-${Date.now()}.${fileExtension}`
       });
 
       formData.append('media_type', mediaType);
-      formData.append('duration', options.duration || (mediaType === 'video' ? 15 : 5));
+      formData.append('duration', String(options.duration || (mediaType === 'video' ? 15 : 5)));
 
       if (options.caption) formData.append('caption', options.caption);
       if (options.stickers) formData.append('stickers', JSON.stringify(options.stickers));
@@ -81,6 +106,8 @@ export const useStories = () => {
         formData.append('allow_resharing', options.allowResharing ? '1' : '0');
       }
 
+      console.log('📤 [useStories] Sending upload request...');
+
       const response = await apiService.post('/stories/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -88,15 +115,30 @@ export const useStories = () => {
         timeout: 180000, // 3 minutes for large uploads
       });
 
+      console.log('📤 [useStories] Upload response:', {
+        success: response.data?.success,
+        storyId: response.data?.story?.id,
+      });
+
       if (response.data.success) {
         // Refresh stories
         await fetchStories();
         await fetchMyStories();
         return response.data.story;
+      } else {
+        throw new Error(response.data?.message || 'Upload failed');
       }
     } catch (err) {
-      console.error('Error uploading story:', err);
-      setError(err.response?.data?.message || 'Failed to upload story');
+      console.error('❌ [useStories] Error uploading story:', err);
+      console.error('❌ [useStories] Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        code: err.code,
+      });
+
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to upload story';
+      setError(errorMessage);
       throw err;
     } finally {
       setLoading(false);

@@ -183,7 +183,7 @@ const VideoPreviewModal = ({ visible, video, onClose, currentUserId }) => {
           </TouchableOpacity>
 
           {/* Delete (if own video) */}
-          {Number(video.user_id) === Number(currentUserId) && (
+          {currentUserId && (Number(video.user_id) === Number(currentUserId) || Number(video.user?.id) === Number(currentUserId)) && (
             <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
               <Ionicons name="trash-outline" size={32} color="#EF4444" />
             </TouchableOpacity>

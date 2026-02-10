@@ -340,13 +340,18 @@ const RootStackNavigator = () => {
 const AppNavigator = React.forwardRef(({ onReady }, ref) => {
   const { isAuthenticated, isLoading } = useAuth();
 
+  console.log('🧭 [AppNavigator] isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+
   if (isLoading) {
+    console.log('🧭 [AppNavigator] Showing loading screen...');
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#EDE8D0' }}>
         <ActivityIndicator size="large" color="#06402B" />
       </View>
     );
   }
+
+  console.log('🧭 [AppNavigator] Rendering', isAuthenticated ? 'MainApp' : 'AuthScreen');
 
   return (
     <NavigationContainer ref={ref} onReady={onReady}>

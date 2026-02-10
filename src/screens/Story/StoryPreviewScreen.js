@@ -20,14 +20,14 @@ import useStories from '../../hooks/useStories';
 
 const StoryPreviewScreen = ({ route, navigation }) => {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
-  const { mediaUri, mediaType } = route.params;
+  const { mediaUri, mediaType, textElements: initialTextElements } = route.params;
   const { uploadStory } = useStories();
 
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  // Text Editor States
-  const [textElements, setTextElements] = useState([]);
+  // Text Editor States - Initialize with passed textElements from editor
+  const [textElements, setTextElements] = useState(initialTextElements || []);
   const [showTextEditor, setShowTextEditor] = useState(false);
   const [currentText, setCurrentText] = useState('');
   const [currentTextColor, setCurrentTextColor] = useState('#FFFFFF');
@@ -127,18 +127,25 @@ const StoryPreviewScreen = ({ route, navigation }) => {
     try {
       setIsUploading(true);
 
-      // Prepare text elements data (remove position/scale, keep only text styling)
+      // Prepare text elements data - normalize positions to percentage for consistent display
       const textElementsData = textElements.map(el => ({
         text: el.text,
         color: el.color,
-        align: el.align,
-        style: el.style,
-        backgroundColor: el.backgroundColor,
+        align: el.align || 'center',
+        style: el.style || 'normal',
+        backgroundColor: el.backgroundColor || 'transparent',
+        // Store as percentage of screen for consistent display across devices
         x: el.x,
         y: el.y,
-        rotation: el.rotation,
-        scale: el.scale,
+        // Convert screen coordinates to center-based for viewer
+        xPercent: (el.x / SCREEN_WIDTH) * 100,
+        yPercent: (el.y / SCREEN_HEIGHT) * 100,
+        rotation: el.rotation || 0,
+        scale: el.scale || 1,
+        size: el.size || 24,
       }));
+
+      console.log('📤 [StoryPreview] Uploading story with text elements:', JSON.stringify(textElementsData));
 
       await uploadStory(mediaUri, mediaType, {
         caption: caption.trim() || null,
@@ -146,7 +153,7 @@ const StoryPreviewScreen = ({ route, navigation }) => {
         text_elements: textElementsData.length > 0 ? JSON.stringify(textElementsData) : null,
       });
 
-      Alert.alert('Success', 'Story posted successfully!', [
+      Alert.alert('Berhasil', 'Story berhasil diposting!', [
         {
           text: 'OK',
           onPress: () => {
@@ -155,8 +162,26 @@ const StoryPreviewScreen = ({ route, navigation }) => {
         },
       ]);
     } catch (error) {
-      console.error('Error posting story:', error);
-      Alert.alert('Error', 'Failed to post story. Please try again.');
+      console.error('❌ [StoryPreview] Error posting story:', error);
+      console.error('❌ [StoryPreview] Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+
+      // More specific error messages
+      let errorMessage = 'Gagal memposting story. Silakan coba lagi.';
+      if (error.response?.status === 413) {
+        errorMessage = 'File terlalu besar. Maksimal 50MB untuk video.';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Sesi Anda telah berakhir. Silakan login kembali.';
+      } else if (error.response?.status === 422) {
+        errorMessage = error.response?.data?.message || 'Format file tidak valid.';
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+        errorMessage = 'Koneksi timeout. Periksa koneksi internet Anda.';
+      }
+
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsUploading(false);
     }

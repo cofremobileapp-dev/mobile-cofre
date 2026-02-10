@@ -102,11 +102,17 @@ const HomeScreen = () => {
 
   const loadVideos = async (page = 1) => {
     try {
+      console.log('📹 [HomeScreen] Loading videos, page:', page, 'tab:', activeTab);
+
       const response = activeTab === 'mengikuti'
         ? await apiService.getFollowingVideos(page)
         : await apiService.getVideos(page);
 
-      const newVideos = response.data.data || [];
+      console.log('📹 [HomeScreen] API Response:', JSON.stringify(response.data).substring(0, 200));
+
+      const newVideos = response.data.data || response.data || [];
+
+      console.log('📹 [HomeScreen] Loaded', newVideos.length, 'videos');
 
       if (page === 1) {
         setVideos(newVideos);
@@ -117,14 +123,23 @@ const HomeScreen = () => {
       setHasMore(response.data.next_page_url !== null);
       setCurrentPage(page);
     } catch (error) {
+      console.error('❌ [HomeScreen] Error loading videos:', error.message);
+      console.error('❌ [HomeScreen] Error details:', JSON.stringify({
+        status: error.response?.status,
+        data: error.response?.data,
+        code: error.code,
+      }));
+
       if (error.response?.status === 401) {
-        Alert.alert('Error', 'Sesi telah berakhir. Silakan login kembali.');
-      } else {
+        Alert.alert('Sesi Berakhir', 'Silakan login kembali.');
+      } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
         Alert.alert(
-          'Error Koneksi',
-          'Gagal memuat video.\n\n' +
-          'Pastikan backend server berjalan dan koneksi internet Anda stabil.'
+          'Timeout',
+          'Server tidak merespon. Coba tarik ke bawah untuk refresh.'
         );
+      } else {
+        // Don't show error on initial load, just log it
+        console.log('📹 [HomeScreen] Silent error, videos:', videos.length);
       }
     } finally {
       setIsLoading(false);
