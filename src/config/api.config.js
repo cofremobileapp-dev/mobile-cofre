@@ -33,22 +33,14 @@ const API_CONFIGS = {
   // iOS Simulator specific
   LOCAL_IOS_SIMULATOR: 'http://localhost:8000/api',
 
-  // PRODUCTION - Fly.io Deployment
-  // Option 1: Via environment variable (recommended)
-  // Option 2: Replace the URL below with your actual production URL
-  PRODUCTION: ENV_PRODUCTION_API_URL || 'https://covre-backend.fly.dev/api',
-
-  // Example production URLs:
-  // 'https://api.cofre.app/api'
-  // 'https://cofre-api.herokuapp.com/api'
-  // 'https://your-ec2-instance.compute.amazonaws.com/api'
+  // PRODUCTION - cofremobileapp.my.id
+  PRODUCTION: ENV_PRODUCTION_API_URL || 'https://cofremobileapp.my.id/api',
 };
 
 // Auto-detect environment based on __DEV__ flag and platform
 // In production builds, this will automatically use PRODUCTION config
 // For development, use LOCAL_PHYSICAL_DEVICE to access backend from any device on the network
-// CHANGED: Force use PRODUCTION because backend is deployed to Fly.io
-const ACTIVE_CONFIG = 'PRODUCTION'; // Always use production backend
+const ACTIVE_CONFIG = 'PRODUCTION'; // Always use production backend (cofremobileapp.my.id)
 
 export const API_CONFIG = {
   BASE_URL: API_CONFIGS[ACTIVE_CONFIG],

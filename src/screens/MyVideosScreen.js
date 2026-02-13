@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/ApiService';
+import { formatPrice } from '../utils/formatUtils';
 
 const MyVideosScreen = ({ navigation }) => {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
@@ -81,13 +82,6 @@ const MyVideosScreen = ({ navigation }) => {
 
   const renderVideoCard = ({ item }) => {
     const menuData = item.menu_data || {};
-    const formatPrice = (price) => {
-      return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        minimumFractionDigits: 0,
-      }).format(price || 0);
-    };
 
     return (
       <TouchableOpacity

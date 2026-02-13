@@ -236,9 +236,6 @@ const UploadScreen = () => {
   };
 
   const handleAiScan = async () => {
-    // EMERGENCY DEBUG: Alert to confirm button press
-    Alert.alert('Debug', 'Tombol AI ditekan! Memulai scan...');
-
     console.log('🔍 Tombol AI ditekan');
     console.log('📸 Thumbnail URI:', thumbnailUri);
 

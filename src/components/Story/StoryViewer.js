@@ -313,9 +313,10 @@ const StoryViewer = ({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: (evt) => {
-        // Don't capture touch events in the top 150px (where controls are)
+        // Don't capture touch events in the top 180px (where controls are)
+        // and bottom 120px (where view count and caption are)
         const touchY = evt.nativeEvent.pageY;
-        if (touchY < 150) {
+        if (touchY < 180 || touchY > SCREEN_HEIGHT - 120) {
           return false;
         }
         return true;
@@ -893,13 +894,17 @@ const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
     gap: 12,
   },
   iconButton: {
-    padding: 4,
+    padding: 8,
     zIndex: 1001,
+    minWidth: 40,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   navigationContainer: {
     position: 'absolute',
-    top: 140,
-    bottom: 100,
+    top: 180,
+    bottom: 120,
     left: 0,
     right: 0,
     flexDirection: 'row',

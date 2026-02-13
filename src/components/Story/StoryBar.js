@@ -92,6 +92,7 @@ const StoryBar = ({ stories = [], onStoryPress, onAddStory }) => {
               // Directly open story viewer
               const storyIndex = stories.findIndex(s => Number(s.user_id) === user?.id);
               console.log('📖 [StoryBar] Opening story at index:', storyIndex);
+              // Always call onStoryPress - it will handle invalid index and refresh
               onStoryPress(storyIndex, user.id);
             } else {
               // Add new story

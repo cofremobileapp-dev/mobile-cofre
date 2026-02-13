@@ -344,13 +344,15 @@ const CalorieScanModal = ({ isOpen, onClose }) => {
                       <TouchableOpacity
                         style={[styles.resultActionButton, styles.saveButton]}
                         onPress={() => {
-                          // TODO: Implement save to meal log
-                          Alert.alert('Success', 'Berhasil disimpan ke log makanan');
-                          handleClose();
+                          Alert.alert(
+                            'Info',
+                            'Hasil scan telah dicatat. Fitur meal log akan segera hadir!',
+                            [{ text: 'OK', onPress: handleClose }]
+                          );
                         }}
                       >
                         <Ionicons name="checkmark" size={20} color="#FFFFFF" />
-                        <Text style={styles.saveButtonText}>Simpan</Text>
+                        <Text style={styles.saveButtonText}>Selesai</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

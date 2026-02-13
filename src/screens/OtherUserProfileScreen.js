@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/ApiService';
 import VideoPreviewModal from '../components/VideoPreviewModal';
+import { formatPrice } from '../utils/formatUtils';
 
 // Grid calculation constants (same as ProfileScreen)
 const COLUMNS = 3;
@@ -45,6 +46,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [playlists, setPlaylists] = useState([]);
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
+  const [expandBio, setExpandBio] = useState(false);
 
   const styles = useMemo(() => createStyles(ITEM_WIDTH), [ITEM_WIDTH]);
 
@@ -132,35 +134,45 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   };
 
   const handleFollow = async () => {
-    // CRASH FIX: Add comprehensive null checks
-    if (!userId || !currentUser?.id) {
-      console.error('Follow error: Missing userId or currentUser');
-      return;
-    }
-
-    // Prevent following yourself
-    if (Number(userId) === Number(currentUser.id)) {
-      Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
-      return;
-    }
-
-    // Prevent multiple clicks
-    if (isFollowLoading) return;
-
-    setIsFollowLoading(true);
-    const previousState = isFollowing;
-    const previousFollowers = userStats?.followers || 0;
-
-    // Optimistic update
-    setIsFollowing(!isFollowing);
-    setUserStats(prev => ({
-      ...prev,
-      followers: isFollowing
-        ? Math.max(0, (prev?.followers || 0) - 1)
-        : (prev?.followers || 0) + 1,
-    }));
-
+    // CRASH FIX: Wrap entire function in try-catch
     try {
+      // Comprehensive null checks with early return
+      if (!userId) {
+        console.error('Follow error: Missing userId');
+        return;
+      }
+
+      if (!currentUser?.id) {
+        console.error('Follow error: Missing currentUser');
+        Alert.alert('Error', 'Silakan login terlebih dahulu');
+        return;
+      }
+
+      // Prevent following yourself
+      if (Number(userId) === Number(currentUser.id)) {
+        Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
+        return;
+      }
+
+      // Prevent multiple clicks
+      if (isFollowLoading) return;
+
+      setIsFollowLoading(true);
+
+      // Capture current state BEFORE any updates
+      const previousState = isFollowing;
+      const previousFollowers = userStats?.followers || 0;
+      const newFollowingState = !previousState;
+
+      // Optimistic update
+      setIsFollowing(newFollowingState);
+      setUserStats(prev => ({
+        ...prev,
+        followers: newFollowingState
+          ? (prev?.followers || 0) + 1
+          : Math.max(0, (prev?.followers || 0) - 1),
+      }));
+
       const response = await apiService.toggleFollow(userId);
 
       // DEFENSIVE: Check response structure before accessing
@@ -174,22 +186,24 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
             followers: response.data.followers_count,
           }));
         }
-      } else {
-        // If response invalid, keep optimistic update
-        console.warn('Toggle follow response missing expected data, keeping optimistic update');
       }
+      // If response is valid but doesn't have expected fields, keep optimistic update
     } catch (error) {
       console.error('Error toggling follow:', error);
 
-      // Revert on error
-      setIsFollowing(previousState);
-      setUserStats(prev => ({
-        ...prev,
-        followers: previousFollowers,
-      }));
+      // Revert on error - reload profile to get accurate data
+      loadUserProfile();
 
       const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error';
-      if (errorMessage.includes('cannot follow yourself')) {
+
+      // Handle rate limiting specifically
+      if (error?.response?.status === 429 || error?.isRateLimited) {
+        const retryAfter = error?.retryAfter || 30;
+        Alert.alert(
+          'Terlalu Banyak Permintaan',
+          `Anda melakukan terlalu banyak permintaan. Silakan tunggu ${retryAfter} detik sebelum mencoba lagi.`
+        );
+      } else if (errorMessage.toLowerCase().includes('cannot follow yourself')) {
         Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
       } else {
         Alert.alert('Error', 'Gagal mengikuti pengguna. Silakan coba lagi.');
@@ -209,16 +223,18 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   };
 
   const renderVideoItem = ({ item, isRepost = false }) => {
-    // Get menu name from menu_data
+    // Get menu name and price from menu_data
     let menuName = null;
+    let menuPrice = null;
     if (item.menu_data) {
       try {
         const menuData = typeof item.menu_data === 'string'
           ? JSON.parse(item.menu_data)
           : item.menu_data;
         menuName = menuData.name || null;
+        menuPrice = menuData.price || null;
       } catch (e) {
-        // If parsing fails, menuName stays null
+        // If parsing fails, values stay null
       }
     }
 
@@ -227,8 +243,13 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
         style={styles.gridItem}
         activeOpacity={0.8}
         onPress={() => {
-          setSelectedVideo(item);
-          setShowVideoPreview(true);
+          // Navigate to full-screen video feed
+          const videoIndex = videos.findIndex(v => v.id === item.id);
+          navigation.navigate('VideoFeed', {
+            videos: videos,
+            initialIndex: videoIndex >= 0 ? videoIndex : 0,
+            title: `@${userData?.username || 'User'}`,
+          });
         }}
       >
         {isRepost && item.original_user && (
@@ -249,6 +270,12 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
             <Text style={styles.menuText} numberOfLines={2}>
               {menuName}
             </Text>
+          </View>
+        )}
+        {/* Price Badge */}
+        {menuPrice && (
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceText}>{formatPrice(menuPrice)}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -300,7 +327,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          @{userData?.email?.split('@')[0] || 'user'}
+          @{userData?.username || userData?.email?.split('@')[0] || 'user'}
         </Text>
         <View style={styles.headerButton} />
       </View>
@@ -308,6 +335,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Info Section */}
         <View style={styles.profileSection}>
+          {/* Profile Header: Avatar + Name + Stats */}
           <View style={styles.profileHeader}>
             {/* Avatar */}
             <View style={styles.avatarContainer}>
@@ -320,28 +348,42 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
               )}
             </View>
 
-            {/* Username, Badge, and Stats */}
+            {/* Name and Stats */}
             <View style={styles.profileInfo}>
-              {/* Username and Badge - Badge di KIRI */}
+              {/* Display Name with Badge */}
               <View style={styles.nameRow}>
+                <Text style={styles.displayName}>{userData?.name || 'User'}</Text>
                 {userData?.badge_status === 'approved' && userData?.show_badge && (
                   <View style={[styles.badge, styles.badgeCreator]}>
                     <Text style={styles.badgeText}>CREATOR</Text>
                   </View>
                 )}
-                <Text style={styles.userName}>{userData?.name || 'User'}</Text>
               </View>
 
-              {/* Stats in One Row */}
+              {/* Stats Row */}
               <View style={styles.statsRow}>
-                <View style={styles.statItem}>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => navigation.navigate('FollowersList', {
+                    userId: userData?.id,
+                    type: 'followers',
+                    userName: userData?.username
+                  })}
+                >
                   <Text style={styles.statValue}>{formatCount(userStats.followers)}</Text>
                   <Text style={styles.statLabel}>Followers</Text>
-                </View>
-                <View style={styles.statItem}>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => navigation.navigate('FollowersList', {
+                    userId: userData?.id,
+                    type: 'following',
+                    userName: userData?.username
+                  })}
+                >
                   <Text style={styles.statValue}>{formatCount(userStats.following)}</Text>
                   <Text style={styles.statLabel}>Following</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{formatCount(userStats.videos)}</Text>
                   <Text style={styles.statLabel}>Videos</Text>
@@ -355,53 +397,64 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
           </View>
 
           {/* Bio */}
-          {userData?.bio ? (
-            <Text style={styles.bio} numberOfLines={3}>
-              {userData.bio}
-            </Text>
-          ) : null}
+          {userData?.bio && (
+            <View style={styles.bioContainer}>
+              <Text style={styles.bio} numberOfLines={expandBio ? undefined : 3}>
+                {userData.bio}
+              </Text>
+              {userData.bio.length > 100 && (
+                <TouchableOpacity onPress={() => setExpandBio(!expandBio)}>
+                  <Text style={styles.seeMoreText}>
+                    {expandBio ? 'Lihat lebih sedikit' : '...Lihat selengkapnya'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Website Link */}
           {userData?.website && (
             <TouchableOpacity
               style={styles.websiteContainer}
               onPress={() => {
-                const url = userData.website.startsWith('http') ? userData.website : `https://${userData.website}`;
+                let url = userData.website;
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  url = `https://${url}`;
+                }
                 require('react-native').Linking.openURL(url).catch(err => {
                   Alert.alert('Error', 'Tidak dapat membuka link');
                 });
               }}
             >
-              <Ionicons name="globe-outline" size={16} color="#06402B" />
+              <Ionicons name="link-outline" size={14} color="#06402B" />
               <Text style={styles.websiteText} numberOfLines={1}>
-                {userData.website.length > 30 ? `${userData.website.substring(0, 30)}...` : userData.website}
+                {userData.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
               </Text>
             </TouchableOpacity>
           )}
 
-          {/* Action Buttons */}
+          {/* Follow Button */}
           {currentUser?.id && Number(userId) !== Number(currentUser.id) && (
-            <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.followButton,
-                  isFollowing && styles.followButtonActive,
-                  isFollowLoading && styles.followButtonDisabled,
-                ]}
-                onPress={handleFollow}
-                disabled={isFollowLoading}
-              >
-                {isFollowLoading ? (
-                  <ActivityIndicator size="small" color={isFollowing ? "#FFFFFF" : "#000000"} />
-                ) : (
-                  <Text style={[
-                    styles.followButtonText,
-                    isFollowing && styles.followButtonTextActive
-                  ]}>
-                    {isFollowing ? 'Mengikuti' : 'Ikuti'}
-                  </Text>
-                )}
-              </TouchableOpacity>            </View>
+            <TouchableOpacity
+              style={[
+                styles.followButton,
+                isFollowing && styles.followButtonActive,
+                isFollowLoading && styles.followButtonDisabled,
+              ]}
+              onPress={handleFollow}
+              disabled={isFollowLoading}
+            >
+              {isFollowLoading ? (
+                <ActivityIndicator size="small" color={isFollowing ? "#FFFFFF" : "#374151"} />
+              ) : (
+                <Text style={[
+                  styles.followButtonText,
+                  isFollowing && styles.followButtonTextActive
+                ]}>
+                  {isFollowing ? 'Mengikuti' : 'Ikuti'}
+                </Text>
+              )}
+            </TouchableOpacity>
           )}
         </View>
 
@@ -570,28 +623,30 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
   },
   profileSection: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
     backgroundColor: '#F5F1E8',
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   avatarContainer: {
-    marginRight: 12,
+    marginRight: 16,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    backgroundColor: '#FFB800',
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -601,83 +656,85 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
     gap: 8,
+    marginBottom: 12,
   },
-  userName: {
-    fontSize: 15,
+  displayName: {
+    fontSize: 17,
     fontWeight: '700',
     color: '#000000',
   },
   badge: {
     backgroundColor: '#FFD700',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   badgeText: {
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '700',
     color: '#000000',
   },
   badgeCreator: {
-    backgroundColor: '#FFD700', // Gold
+    backgroundColor: '#FFD700',
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    gap: 16,
+    gap: 0,
   },
   statItem: {
     alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: 12,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#000000',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   statLabel: {
     fontSize: 11,
     color: '#6B7280',
-    fontWeight: '500',
+    fontWeight: '400',
+  },
+  bioContainer: {
+    marginBottom: 8,
   },
   bio: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#374151',
-    lineHeight: 18,
-    marginBottom: 12,
+    lineHeight: 20,
+  },
+  seeMoreText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 4,
   },
   websiteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 12,
-    paddingVertical: 6,
+    marginBottom: 8,
   },
   websiteText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#06402B',
-    marginLeft: 6,
-    textDecorationLine: 'underline',
-    flex: 1,
-  },
-  actionButtonsContainer: {
-    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   followButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 12,
     borderWidth: 1,
-    borderColor: '#DDDDDD',
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
+    borderColor: '#E5E5E5',
   },
   followButtonActive: {
     backgroundColor: '#10B981',
@@ -689,7 +746,7 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
   followButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
+    color: '#374151',
   },
   followButtonTextActive: {
     color: '#FFFFFF',
@@ -771,6 +828,21 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     lineHeight: 14,
+  },
+  priceBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(6, 64, 43, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    zIndex: 1,
+  },
+  priceText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   emptyState: {
     paddingVertical: 100,

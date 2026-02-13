@@ -10,11 +10,14 @@ import {
   Modal,
   Animated,
   Image,
+  Share,
 } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/ApiService';
 import CommentModal from './CommentModal';
+import ShareModal from './ShareModal';
+import { formatPrice } from '../utils/formatUtils';
 
 const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, currentIndex, totalVideos, onVideoError, isScreenFocused }) => {
   const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
@@ -206,6 +209,126 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
     }
   };
 
+  const handleReport = async () => {
+    // Don't allow reporting own videos
+    if (Number(item.user?.id) === Number(currentUserId)) {
+      Alert.alert('Perhatian', 'Anda tidak bisa melaporkan video sendiri');
+      return;
+    }
+
+    Alert.alert(
+      'Laporkan Video',
+      'Apakah Anda yakin ingin melaporkan video ini?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Laporkan',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.reportVideo(item.id, 'Konten tidak pantas');
+              Alert.alert('Terima kasih', 'Laporan Anda telah dikirim dan akan ditinjau oleh tim kami.');
+            } catch (error) {
+              if (error.response?.status === 429 || error?.isRateLimited) {
+                Alert.alert(
+                  'Terlalu Banyak Laporan',
+                  'Anda telah mengirim terlalu banyak laporan. Silakan tunggu 1 menit sebelum mencoba lagi.'
+                );
+              } else {
+                Alert.alert('Error', 'Gagal mengirim laporan. Silakan coba lagi.');
+              }
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle share video
+  const handleShare = async () => {
+    try {
+      const shareUrl = `https://cofremobileapp.my.id/video/${item.id}`;
+      const menuName = menuData?.name || 'Video kuliner menarik';
+
+      await Share.share({
+        message: `${menuName}\n\nLihat video ini di Cofre: ${shareUrl}`,
+        url: shareUrl,
+        title: menuName,
+      });
+    } catch (error) {
+      if (error.message !== 'User did not share') {
+        Alert.alert('Error', 'Gagal membagikan video');
+      }
+    }
+  };
+
+  // Handle edit video (only for own videos)
+  const handleEdit = () => {
+    if (Number(item.user?.id) !== Number(currentUserId)) {
+      Alert.alert('Perhatian', 'Anda hanya bisa mengedit video sendiri');
+      return;
+    }
+
+    navigation?.navigate('EditVideo', { videoId: item.id, videoData: item });
+  };
+
+  // Handle delete video (only for own videos)
+  const handleDeleteVideo = () => {
+    if (Number(item.user?.id) !== Number(currentUserId)) {
+      Alert.alert('Perhatian', 'Anda hanya bisa menghapus video sendiri');
+      return;
+    }
+
+    Alert.alert(
+      'Hapus Video',
+      'Apakah Anda yakin ingin menghapus video ini? Tindakan ini tidak dapat dibatalkan.',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.deleteVideo(item.id);
+              Alert.alert('Sukses', 'Video berhasil dihapus');
+              // Optionally refresh the feed or navigate away
+            } catch (error) {
+              console.error('Error deleting video:', error);
+              const errorMessage = error.response?.data?.message || 'Gagal menghapus video';
+              Alert.alert('Error', errorMessage);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle not interested
+  const handleNotInterested = async () => {
+    Alert.alert(
+      'Tidak Tertarik',
+      'Video ini akan disembunyikan dari feed Anda',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Sembunyikan',
+          onPress: async () => {
+            try {
+              await apiService.notInterested(item.id);
+              Alert.alert('Berhasil', 'Video tidak akan ditampilkan lagi');
+            } catch (error) {
+              Alert.alert('Error', 'Gagal menyembunyikan video');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Show more options menu
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+
   const handleFollow = async () => {
     try {
       const targetUserId = item.user?.id;
@@ -267,14 +390,6 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   } catch (error) {
     menuData = {};
   }
-
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(price || 0);
-  };
 
   // Function to render description with highlighted hashtags
   const renderDescriptionWithHashtags = (text) => {
@@ -459,6 +574,22 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
             <Text style={videoItemStyles.repostedLabel}>Diposting ulang</Text>
           )}
         </TouchableOpacity>
+
+        {/* Share Button */}
+        <TouchableOpacity
+          style={videoItemStyles.actionButton}
+          onPress={handleShare}
+        >
+          <Ionicons name="share-social-outline" size={26} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* More Options Button */}
+        <TouchableOpacity
+          style={videoItemStyles.actionButton}
+          onPress={() => setShowOptionsMenu(true)}
+        >
+          <Ionicons name="ellipsis-horizontal" size={26} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {/* Bottom Info */}
@@ -541,12 +672,15 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
                 <Text style={videoItemComponentStyles.recipeSectionTitle}>Alat dan Bahan</Text>
                 <View style={videoItemComponentStyles.recipeListContainer}>
                   {menuData.ingredients ? (
-                    menuData.ingredients.split('\n').filter(item => item.trim()).map((ingredient, index) => (
-                      <View key={index} style={videoItemComponentStyles.recipeListItem}>
-                        <Text style={videoItemComponentStyles.recipeBullet}>•</Text>
-                        <Text style={videoItemComponentStyles.recipeListText}>{ingredient.trim()}</Text>
-                      </View>
-                    ))
+                    // Handle both array and string formats
+                    (Array.isArray(menuData.ingredients) ? menuData.ingredients : menuData.ingredients.split('\n'))
+                      .filter(item => item && item.toString().trim())
+                      .map((ingredient, index) => (
+                        <View key={index} style={videoItemComponentStyles.recipeListItem}>
+                          <Text style={videoItemComponentStyles.recipeBullet}>•</Text>
+                          <Text style={videoItemComponentStyles.recipeListText}>{ingredient.toString().trim()}</Text>
+                        </View>
+                      ))
                   ) : (
                     <Text style={videoItemComponentStyles.recipeListText}>Informasi bahan belum tersedia</Text>
                   )}
@@ -558,16 +692,19 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
                 <View style={videoItemComponentStyles.recipeSection}>
                   <Text style={videoItemComponentStyles.recipeSectionTitle}>Cara Pembuatan</Text>
                   <View style={videoItemComponentStyles.recipeListContainer}>
-                    {menuData.steps.split('\n').filter(step => step.trim()).map((step, index) => {
-                      // Remove existing number if present (e.g., "1. Mix" becomes "Mix")
-                      const cleanStep = step.trim().replace(/^\d+\.\s*/, '');
-                      return (
-                        <View key={index} style={videoItemComponentStyles.recipeListItem}>
-                          <Text style={videoItemComponentStyles.recipeNumbering}>{index + 1}.</Text>
-                          <Text style={videoItemComponentStyles.recipeListText}>{cleanStep}</Text>
-                        </View>
-                      );
-                    })}
+                    {/* Handle both array and string formats */}
+                    {(Array.isArray(menuData.steps) ? menuData.steps : menuData.steps.split('\n'))
+                      .filter(step => step && step.toString().trim())
+                      .map((step, index) => {
+                        // Remove existing number if present (e.g., "1. Mix" becomes "Mix")
+                        const cleanStep = step.toString().trim().replace(/^\d+\.\s*/, '');
+                        return (
+                          <View key={index} style={videoItemComponentStyles.recipeListItem}>
+                            <Text style={videoItemComponentStyles.recipeNumbering}>{index + 1}.</Text>
+                            <Text style={videoItemComponentStyles.recipeListText}>{cleanStep}</Text>
+                          </View>
+                        );
+                      })}
                   </View>
                 </View>
               )}
@@ -590,6 +727,122 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
         onClose={() => setShowComments(false)}
         videoId={item.id}
         initialCommentsCount={commentsCount}
+      />
+
+      {/* Options Menu Modal */}
+      <Modal
+        visible={showOptionsMenu}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowOptionsMenu(false)}
+      >
+        <TouchableOpacity
+          style={videoItemComponentStyles.optionsModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsMenu(false)}
+        >
+          <View style={videoItemComponentStyles.optionsModalContainer}>
+            <View style={videoItemComponentStyles.optionsModalHandle} />
+
+            {/* Edit - Only for own videos */}
+            {Number(item.user?.id) === Number(currentUserId) && (
+              <TouchableOpacity
+                style={videoItemComponentStyles.optionItem}
+                onPress={() => {
+                  setShowOptionsMenu(false);
+                  handleEdit();
+                }}
+              >
+                <Ionicons name="create-outline" size={24} color="#1F2937" />
+                <Text style={videoItemComponentStyles.optionText}>Edit Postingan</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Delete - Only for own videos */}
+            {Number(item.user?.id) === Number(currentUserId) && (
+              <TouchableOpacity
+                style={[videoItemComponentStyles.optionItem, videoItemComponentStyles.optionItemDanger]}
+                onPress={() => {
+                  setShowOptionsMenu(false);
+                  handleDeleteVideo();
+                }}
+              >
+                <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                <Text style={[videoItemComponentStyles.optionText, videoItemComponentStyles.optionTextDanger]}>Hapus Video</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Share */}
+            <TouchableOpacity
+              style={videoItemComponentStyles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                handleShare();
+              }}
+            >
+              <Ionicons name="share-social-outline" size={24} color="#1F2937" />
+              <Text style={videoItemComponentStyles.optionText}>Bagikan ke Aplikasi Lain</Text>
+            </TouchableOpacity>
+
+            {/* Add to Playlist */}
+            <TouchableOpacity
+              style={videoItemComponentStyles.optionItem}
+              onPress={() => {
+                setShowOptionsMenu(false);
+                setShowShareModal(true);
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#1F2937" />
+              <Text style={videoItemComponentStyles.optionText}>Tambah ke Playlist</Text>
+            </TouchableOpacity>
+
+            {/* Not Interested - Only for other users' videos */}
+            {Number(item.user?.id) !== Number(currentUserId) && (
+              <TouchableOpacity
+                style={videoItemComponentStyles.optionItem}
+                onPress={() => {
+                  setShowOptionsMenu(false);
+                  handleNotInterested();
+                }}
+              >
+                <Ionicons name="eye-off-outline" size={24} color="#1F2937" />
+                <Text style={videoItemComponentStyles.optionText}>Tidak Tertarik</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Report - Only for other users' videos */}
+            {Number(item.user?.id) !== Number(currentUserId) && (
+              <TouchableOpacity
+                style={[videoItemComponentStyles.optionItem, videoItemComponentStyles.optionItemDanger]}
+                onPress={() => {
+                  setShowOptionsMenu(false);
+                  handleReport();
+                }}
+              >
+                <Ionicons name="flag-outline" size={24} color="#EF4444" />
+                <Text style={[videoItemComponentStyles.optionText, videoItemComponentStyles.optionTextDanger]}>Laporkan</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Cancel */}
+            <TouchableOpacity
+              style={[videoItemComponentStyles.optionItem, videoItemComponentStyles.optionItemCancel]}
+              onPress={() => setShowOptionsMenu(false)}
+            >
+              <Text style={videoItemComponentStyles.optionTextCancel}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Share Modal for Add to Playlist */}
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        video={item}
+        onRepostSuccess={() => {
+          setIsReposted(true);
+        }}
       />
     </View>
   );
@@ -940,6 +1193,60 @@ const videoItemComponentStyles = StyleSheet.create({
   recipeServingsText: {
     fontSize: 13,
     color: '#666666',
+  },
+  // Options Menu Styles
+  optionsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  optionsModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: 34,
+    paddingHorizontal: 20,
+  },
+  optionsModalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#D1D5DB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    gap: 16,
+  },
+  optionText: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  optionItemDanger: {
+    borderBottomWidth: 0,
+  },
+  optionTextDanger: {
+    color: '#EF4444',
+  },
+  optionItemCancel: {
+    justifyContent: 'center',
+    marginTop: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    borderBottomWidth: 0,
+  },
+  optionTextCancel: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

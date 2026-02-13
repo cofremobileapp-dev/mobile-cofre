@@ -24,6 +24,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/ApiService';
 import { useNavigation } from '@react-navigation/native';
 import VideoPreviewModal from '../components/VideoPreviewModal';
+import HighlightsBar from '../components/HighlightsBar';
+import { formatPrice } from '../utils/formatUtils';
 
 // Grid calculation constants
 const COLUMNS = 3;
@@ -58,13 +60,15 @@ const ProfileScreen = () => {
 
   // Edit Profile Modal States
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editUsername, setEditUsername] = useState(user?.name || '');
+  const [editFullname, setEditFullname] = useState(user?.name || '');
+  const [editUsername, setEditUsername] = useState(user?.username || '');
   const [editBio, setEditBio] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [accountType, setAccountType] = useState(user?.account_type || 'regular');
   const [showBadge, setShowBadge] = useState(user?.show_badge ?? true);
   const [avatarUri, setAvatarUri] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [expandBio, setExpandBio] = useState(false);
 
   // Video Preview Modal States
   const [showVideoPreview, setShowVideoPreview] = useState(false);
@@ -237,7 +241,8 @@ const ProfileScreen = () => {
 
   const updateProfileData = async () => {
     const updateData = {
-      name: editUsername,
+      name: editFullname,
+      username: editUsername,
       bio: editBio,
       account_type: accountType,
       website: editWebsite,
@@ -329,7 +334,8 @@ const ProfileScreen = () => {
   };
 
   const openEditProfileModal = () => {
-    setEditUsername(user?.name || '');
+    setEditFullname(user?.name || '');
+    setEditUsername(user?.username || '');
     setEditBio(user?.bio || '');
     setEditWebsite(user?.website || '');
     setAccountType(user?.account_type || 'regular');
@@ -345,8 +351,13 @@ const ProfileScreen = () => {
   };
 
   const handleVideoPress = (video) => {
-    setSelectedVideo(video);
-    setShowVideoPreview(true);
+    // Navigate to full-screen video feed
+    const videoIndex = videos.findIndex(v => v.id === video.id);
+    navigation.navigate('VideoFeed', {
+      videos: videos,
+      initialIndex: videoIndex >= 0 ? videoIndex : 0,
+      title: 'Video Saya',
+    });
   };
 
   const handleVideoPreviewClose = (shouldReload) => {
@@ -360,6 +371,14 @@ const ProfileScreen = () => {
   };
 
   const renderVideoItem = ({ item, isRepost = false }) => {
+    // Parse menu_data if it's a string
+    let menuData = null;
+    try {
+      menuData = typeof item.menu_data === 'string' ? JSON.parse(item.menu_data) : item.menu_data;
+    } catch (e) {
+      menuData = null;
+    }
+
     return (
       <TouchableOpacity
         style={styles.gridItem}
@@ -379,6 +398,12 @@ const ProfileScreen = () => {
           style={styles.videoThumbnail}
           resizeMode="cover"
         />
+        {/* Price Badge */}
+        {menuData?.price && (
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceText}>{formatPrice(menuData.price)}</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -399,7 +424,7 @@ const ProfileScreen = () => {
         <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>@{user?.email?.split('@')[0] || 'user'}</Text>
+        <Text style={styles.headerTitle}>@{user?.username || user?.email?.split('@')[0] || 'user'}</Text>
         <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('Settings')}>
           <Ionicons name="settings-outline" size={24} color="#000000" />
         </TouchableOpacity>
@@ -408,6 +433,7 @@ const ProfileScreen = () => {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Profile Info Section */}
         <View style={styles.profileSection}>
+          {/* Profile Header: Avatar + Name + Stats */}
           <View style={styles.profileHeader}>
             {/* Avatar */}
             <View style={styles.avatarContainer}>
@@ -426,10 +452,11 @@ const ProfileScreen = () => {
               )}
             </View>
 
-            {/* Username, Badge, and Stats */}
+            {/* Name and Stats */}
             <View style={styles.profileInfo}>
-              {/* Username and Badge - Badge di KIRI */}
+              {/* Display Name with Badge */}
               <View style={styles.nameRow}>
+                <Text style={styles.displayName}>{user?.name || 'User'}</Text>
                 {user?.badge_status === 'approved' && user?.show_badge && (
                   <View style={[styles.badge, styles.badgeCreator]}>
                     <Text style={styles.badgeText}>CREATOR</Text>
@@ -440,19 +467,32 @@ const ProfileScreen = () => {
                     <Text style={styles.badgeText}>REVIEW</Text>
                   </View>
                 )}
-                <Text style={styles.userName}>{user?.name || 'User'}</Text>
               </View>
 
-              {/* Stats in One Row */}
+              {/* Stats Row */}
               <View style={styles.statsRow}>
-                <View style={styles.statItem}>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => navigation.navigate('FollowersList', {
+                    userId: user?.id,
+                    type: 'followers',
+                    userName: user?.username
+                  })}
+                >
                   <Text style={styles.statValue}>{formatCount(userStats.followers)}</Text>
                   <Text style={styles.statLabel}>Followers</Text>
-                </View>
-                <View style={styles.statItem}>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => navigation.navigate('FollowersList', {
+                    userId: user?.id,
+                    type: 'following',
+                    userName: user?.username
+                  })}
+                >
                   <Text style={styles.statValue}>{formatCount(userStats.following)}</Text>
                   <Text style={styles.statLabel}>Following</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{formatCount(userStats.videos)}</Text>
                   <Text style={styles.statLabel}>Videos</Text>
@@ -468,9 +508,19 @@ const ProfileScreen = () => {
           {/* Bio */}
           {user?.bio && (
             <View style={styles.bioContainer}>
-              <Text style={styles.bio} numberOfLines={2}>
+              <Text
+                style={styles.bio}
+                numberOfLines={expandBio ? undefined : 3}
+              >
                 {user.bio}
               </Text>
+              {user.bio.length > 100 && (
+                <TouchableOpacity onPress={() => setExpandBio(!expandBio)}>
+                  <Text style={styles.seeMoreText}>
+                    {expandBio ? 'Lihat lebih sedikit' : '...Lihat selengkapnya'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -479,22 +529,25 @@ const ProfileScreen = () => {
             <TouchableOpacity
               style={styles.websiteContainer}
               onPress={() => {
-                const url = user.website.startsWith('http') ? user.website : `https://${user.website}`;
-                require('react-native').Linking.openURL(url).catch(err => {
+                let url = user.website;
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  url = `https://${url}`;
+                }
+                Linking.openURL(url).catch(err => {
                   Alert.alert('Error', 'Tidak dapat membuka link');
                 });
               }}
             >
-              <Ionicons name="globe-outline" size={16} color="#06402B" />
+              <Ionicons name="link-outline" size={14} color="#06402B" />
               <Text style={styles.websiteText} numberOfLines={1}>
-                {user.website.length > 30 ? `${user.website.substring(0, 30)}...` : user.website}
+                {user.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
               </Text>
             </TouchableOpacity>
           )}
 
-          {/* Edit Profile Button */}
+          {/* Edit Profile Button - Outlined Style */}
           <TouchableOpacity style={styles.editProfileButton} onPress={openEditProfileModal}>
-            <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+            <Ionicons name="create-outline" size={18} color="#374151" />
             <Text style={styles.editProfileButtonText}>Edit Profile</Text>
           </TouchableOpacity>
 
@@ -536,6 +589,15 @@ const ProfileScreen = () => {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Story Highlights */}
+        <HighlightsBar
+          userId={user?.id}
+          isOwnProfile={true}
+          onHighlightPress={(highlight) => {
+            navigation.navigate('HighlightViewer', { highlight });
+          }}
+        />
 
         {/* Tab Bar */}
         <View style={styles.tabBar}>
@@ -712,7 +774,7 @@ const ProfileScreen = () => {
                     />
                   ) : (
                     <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarPlaceholderText}>{editUsername?.charAt(0).toUpperCase() || 'U'}</Text>
+                      <Text style={styles.avatarPlaceholderText}>{editFullname?.charAt(0).toUpperCase() || 'U'}</Text>
                     </View>
                   )}
                   <View style={styles.avatarUploadIcon}>
@@ -724,12 +786,33 @@ const ProfileScreen = () => {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Username</Text>
+                <View style={styles.usernameInputContainer}>
+                  <Text style={styles.usernamePrefix}>@</Text>
+                  <TextInput
+                    style={styles.usernameInput}
+                    value={editUsername}
+                    onChangeText={(text) => {
+                      // Only allow alphanumeric, dots, and underscores
+                      const cleanText = text.replace(/[^a-zA-Z0-9._]/g, '').toLowerCase();
+                      setEditUsername(cleanText);
+                    }}
+                    placeholder="username"
+                    placeholderTextColor="#999999"
+                    autoCapitalize="none"
+                    maxLength={30}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nama Lengkap</Text>
                 <TextInput
                   style={styles.textInput}
-                  value={editUsername}
-                  onChangeText={setEditUsername}
-                  placeholder="Enter your username"
+                  value={editFullname}
+                  onChangeText={setEditFullname}
+                  placeholder="Masukkan nama lengkap"
                   placeholderTextColor="#999999"
+                  maxLength={255}
                 />
               </View>
 
@@ -975,105 +1058,110 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
   },
   profileSection: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 20,
     paddingBottom: 12,
     backgroundColor: '#F5F1E8',
   },
   profileHeader: {
     flexDirection: 'row',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   avatarContainer: {
-    marginRight: 12,
+    marginRight: 16,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    backgroundColor: '#FFB800',
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   profileInfo: {
     flex: 1,
-    justifyContent: 'center',
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 12,
   },
-  userName: {
-    fontSize: 15,
+  displayName: {
+    fontSize: 17,
     fontWeight: '700',
     color: '#000000',
   },
   badge: {
     backgroundColor: '#FFD700',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   badgeCreator: {
-    backgroundColor: '#FFD700', // Gold
+    backgroundColor: '#FFD700',
   },
   badgePending: {
-    backgroundColor: '#FFA500', // Orange
+    backgroundColor: '#FFA500',
   },
   badgeText: {
-    fontSize: 7,
+    fontSize: 8,
     fontWeight: '700',
     color: '#000000',
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    gap: 16,
+    gap: 0,
   },
   statItem: {
     alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: 12,
+    borderRightWidth: 0,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#000000',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   statLabel: {
     fontSize: 11,
     color: '#6B7280',
-    fontWeight: '500',
+    fontWeight: '400',
   },
   bioContainer: {
-    marginBottom: 12,
-    paddingTop: 4,
+    marginBottom: 8,
   },
   bio: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#374151',
-    lineHeight: 18,
+    lineHeight: 20,
+  },
+  seeMoreText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 4,
   },
   websiteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    paddingVertical: 6,
+    marginBottom: 8,
   },
   websiteText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#06402B',
-    marginLeft: 6,
-    textDecorationLine: 'underline',
-    flex: 1,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   actionButtonsRow: {
     flexDirection: 'row',
@@ -1101,14 +1189,17 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#06402B',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     marginTop: 12,
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   editProfileButtonText: {
-    color: '#FFFFFF',
+    color: '#374151',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1198,6 +1289,21 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
     zIndex: 1,
     maxWidth: ITEM_WIDTH - 20,
   },
+  priceBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(6, 64, 43, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    zIndex: 1,
+  },
+  priceText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   repostText: {
     fontSize: 9,
     fontWeight: '600',
@@ -1234,7 +1340,8 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '90%',
+    maxHeight: '85%',
+    minHeight: '60%',
   },
   editModalHeader: {
     flexDirection: 'row',
@@ -1255,7 +1362,7 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
   },
   editModalContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   avatarSection: {
     alignItems: 'center',
@@ -1318,6 +1425,26 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
     color: '#000000',
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  usernameInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 16,
+  },
+  usernamePrefix: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  usernameInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#000000',
   },
   bioInput: {
     minHeight: 100,
@@ -1382,8 +1509,10 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 12,
-    marginBottom: 20,
+    marginTop: 24,
+    marginBottom: 60,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
   },
   cancelButton: {
     flex: 1,

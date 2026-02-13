@@ -10,11 +10,163 @@ import {
   ActivityIndicator,
   TextInput,
   Slider,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Canvas, Path, Skia, useCanvasRef } from '@shopify/react-native-skia';
 import { useNavigation } from '@react-navigation/native';
+
+// Draggable Text Component with Pinch-to-Zoom
+const DraggableText = ({ element, onDelete, onUpdatePosition, onUpdateSize, isEditMode, getTextStyleProps }) => {
+  const pan = useRef(new Animated.ValueXY({ x: element.x, y: element.y })).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  // Pinch-to-zoom state
+  const pinchRef = useRef({
+    isPinching: false,
+    initialDistance: 0,
+    initialSize: element.size || 24,
+    currentSize: element.size || 24,
+  });
+
+  // Calculate distance between two touch points
+  const getDistance = (touches) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].pageX - touches[1].pageX;
+    const dy = touches[0].pageY - touches[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => isEditMode,
+      onMoveShouldSetPanResponder: (evt) => {
+        // Allow both single finger (drag) and two fingers (pinch)
+        return isEditMode;
+      },
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length >= 2) {
+          // Start pinch gesture
+          pinchRef.current.isPinching = true;
+          pinchRef.current.initialDistance = getDistance(touches);
+          pinchRef.current.initialSize = element.size || 24;
+          pinchRef.current.currentSize = element.size || 24;
+        } else {
+          // Single touch - drag
+          pan.setOffset({
+            x: pan.x._value,
+            y: pan.y._value,
+          });
+          pan.setValue({ x: 0, y: 0 });
+          // Scale up slightly when grabbed
+          Animated.spring(scale, {
+            toValue: 1.1,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const touches = evt.nativeEvent.touches;
+
+        if (touches.length >= 2 && pinchRef.current.isPinching) {
+          // Handle pinch-to-zoom
+          const currentDistance = getDistance(touches);
+          const scaleFactor = currentDistance / pinchRef.current.initialDistance;
+          const newSize = Math.round(pinchRef.current.initialSize * scaleFactor);
+
+          // Clamp size between 12 and 72
+          const clampedSize = Math.min(72, Math.max(12, newSize));
+          pinchRef.current.currentSize = clampedSize;
+
+          // Update visual scale
+          const visualScale = clampedSize / (element.size || 24);
+          scale.setValue(visualScale);
+        } else if (touches.length === 1 && !pinchRef.current.isPinching) {
+          // Single touch - drag
+          Animated.event(
+            [null, { dx: pan.x, dy: pan.y }],
+            { useNativeDriver: false }
+          )(evt, gestureState);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (pinchRef.current.isPinching) {
+          // End pinch - update text size
+          const newSize = pinchRef.current.currentSize;
+          pinchRef.current.isPinching = false;
+
+          // Reset visual scale and update actual size
+          scale.setValue(1);
+          if (onUpdateSize) {
+            onUpdateSize(element.id, newSize);
+          }
+        } else {
+          // End drag
+          pan.flattenOffset();
+          // Scale back to normal
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: true,
+          }).start();
+          // Update position in parent state
+          onUpdatePosition(element.id, pan.x._value, pan.y._value);
+        }
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.draggableTextWrapper,
+        {
+          transform: [
+            { translateX: pan.x },
+            { translateY: pan.y },
+            { scale: scale },
+          ],
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.textElementInner,
+          element.backgroundColor && {
+            backgroundColor: element.backgroundColor,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.textElementText,
+            {
+              color: element.color,
+              fontSize: element.size,
+              ...getTextStyleProps(element.style),
+            },
+          ]}
+        >
+          {element.text}
+        </Text>
+      </View>
+      {isEditMode && (
+        <TouchableOpacity
+          style={styles.deleteTextButton}
+          onPress={() => onDelete(element.id)}
+        >
+          <Ionicons name="close-circle" size={24} color="#FF3B5C" />
+        </TouchableOpacity>
+      )}
+    </Animated.View>
+  );
+};
 
 const StoryEditorScreen = ({ route }) => {
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
@@ -34,6 +186,17 @@ const StoryEditorScreen = ({ route }) => {
   const [textStyle, setTextStyle] = useState('classic');
   const [textSize, setTextSize] = useState(24);
   const [textElements, setTextElements] = useState([]);
+  const [textBackgroundColor, setTextBackgroundColor] = useState(null); // null = transparent
+
+  // Background colors for text
+  const backgroundColors = [
+    { id: 'none', color: null, label: 'None' },
+    { id: 'black', color: 'rgba(0,0,0,0.7)', label: 'Black' },
+    { id: 'white', color: 'rgba(255,255,255,0.9)', label: 'White' },
+    { id: 'green', color: 'rgba(16,185,129,0.8)', label: 'Green' },
+    { id: 'blue', color: 'rgba(59,130,246,0.8)', label: 'Blue' },
+    { id: 'red', color: 'rgba(239,68,68,0.8)', label: 'Red' },
+  ];
 
   // Drawing tools configuration
   const tools = [
@@ -147,9 +310,10 @@ const StoryEditorScreen = ({ route }) => {
       id: Date.now().toString(),
       text: textInput,
       color: selectedColor,
+      backgroundColor: textBackgroundColor,
       style: textStyle,
       size: textSize,
-      x: SCREEN_WIDTH / 2,
+      x: SCREEN_WIDTH / 2 - 50,
       y: SCREEN_HEIGHT / 3,
     };
 
@@ -160,6 +324,24 @@ const StoryEditorScreen = ({ route }) => {
   // Delete text element
   const handleDeleteText = (id) => {
     setTextElements(textElements.filter(el => el.id !== id));
+  };
+
+  // Update text element position after drag
+  const handleUpdateTextPosition = (id, newX, newY) => {
+    setTextElements(prevElements =>
+      prevElements.map(el =>
+        el.id === id ? { ...el, x: newX, y: newY } : el
+      )
+    );
+  };
+
+  // Handle text size update from pinch-to-zoom
+  const handleUpdateTextSize = (id, newSize) => {
+    setTextElements(prevElements =>
+      prevElements.map(el =>
+        el.id === id ? { ...el, size: newSize } : el
+      )
+    );
   };
 
   // Get text style properties
@@ -249,40 +431,18 @@ const StoryEditorScreen = ({ route }) => {
         </View>
       )}
 
-      {/* Text Elements Overlay */}
-      <View style={styles.textElementsContainer} pointerEvents={mode === 'text' ? 'auto' : 'none'}>
+      {/* Text Elements Overlay - Always visible, draggable in text mode */}
+      <View style={styles.textElementsContainer} pointerEvents="box-none">
         {textElements.map((element) => (
-          <View
+          <DraggableText
             key={element.id}
-            style={[
-              styles.textElementWrapper,
-              {
-                left: element.x - 100,
-                top: element.y - 30,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.textElementText,
-                {
-                  color: element.color,
-                  fontSize: element.size,
-                  ...getTextStyleProps(element.style),
-                },
-              ]}
-            >
-              {element.text}
-            </Text>
-            {mode === 'text' && (
-              <TouchableOpacity
-                style={styles.deleteTextButton}
-                onPress={() => handleDeleteText(element.id)}
-              >
-                <Ionicons name="close-circle" size={24} color="#FF3B5C" />
-              </TouchableOpacity>
-            )}
-          </View>
+            element={element}
+            onDelete={handleDeleteText}
+            onUpdatePosition={handleUpdateTextPosition}
+            onUpdateSize={handleUpdateTextSize}
+            isEditMode={mode === 'text'}
+            getTextStyleProps={getTextStyleProps}
+          />
         ))}
       </View>
 
@@ -439,6 +599,26 @@ const StoryEditorScreen = ({ route }) => {
                 maximumTrackTintColor="#FFFFFF50"
                 thumbTintColor="#10B981"
               />
+            </View>
+
+            {/* Background Color Selection */}
+            <View style={styles.bgColorContainer}>
+              <Text style={styles.bgColorLabel}>Background:</Text>
+              <View style={styles.bgColorOptions}>
+                {backgroundColors.map((bg) => (
+                  <TouchableOpacity
+                    key={bg.id}
+                    style={[
+                      styles.bgColorButton,
+                      bg.color ? { backgroundColor: bg.color } : styles.bgColorNone,
+                      textBackgroundColor === bg.color && styles.bgColorSelected,
+                    ]}
+                    onPress={() => setTextBackgroundColor(bg.color)}
+                  >
+                    {!bg.color && <Ionicons name="close" size={16} color="#FFFFFF" />}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {/* Add Text Button */}
@@ -602,23 +782,65 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  textElementWrapper: {
+  draggableTextWrapper: {
     position: 'absolute',
     padding: 8,
+    alignItems: 'center',
+  },
+  textElementInner: {
+    alignItems: 'center',
   },
   textElementText: {
     textAlign: 'center',
     fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
   deleteTextButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: -12,
+    right: -12,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  bgColorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  bgColorLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  bgColorOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  bgColorButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  bgColorNone: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderStyle: 'dashed',
+    borderColor: '#FFFFFF',
+  },
+  bgColorSelected: {
+    borderColor: '#10B981',
+    borderWidth: 3,
   },
   textInput: {
     backgroundColor: '#1F2937',

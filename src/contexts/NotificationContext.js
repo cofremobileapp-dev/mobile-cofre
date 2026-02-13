@@ -68,7 +68,7 @@ export const NotificationProvider = ({ children }) => {
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      await apiService.post('/notifications/mark-all-read');
+      await apiService.post('/notifications/read-all');
 
       // Update local state
       setNotifications(prev =>

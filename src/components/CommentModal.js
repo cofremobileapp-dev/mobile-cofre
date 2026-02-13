@@ -134,9 +134,23 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
 
   const renderComment = ({ item }) => {
     // Only show delete button if comment belongs to current user
-    // Check both item.user_id and item.user?.id for compatibility
-    const commentUserId = item.user_id || item.user?.id;
-    const isOwnComment = user?.id && commentUserId && Number(user.id) === Number(commentUserId);
+    // Get comment owner ID - prefer user_id field, fallback to user.id
+    const commentUserId = item.user_id !== undefined ? item.user_id : item.user?.id;
+    const currentUserId = user?.id;
+
+    // Debug logging to track ownership issues
+    console.log('🔍 [CommentModal] Checking ownership:', {
+      commentId: item.id,
+      commentUserId,
+      currentUserId,
+      commentUserIdType: typeof commentUserId,
+      currentUserIdType: typeof currentUserId,
+    });
+
+    // Strict ownership check - convert both to numbers for accurate comparison
+    const isOwnComment = currentUserId != null &&
+      commentUserId != null &&
+      Number(currentUserId) === Number(commentUserId);
 
     return (
       <View style={styles.commentItem}>

@@ -41,6 +41,18 @@ import PlaylistDetailScreen from '../screens/PlaylistDetailScreen';
 // Import Badge Application screen
 import BadgeApplicationScreen from '../screens/BadgeApplicationScreen';
 
+// Import Followers List screen
+import FollowersListScreen from '../screens/FollowersListScreen';
+
+// Import Video Feed screen
+import VideoFeedScreen from '../screens/VideoFeedScreen';
+
+// Import Edit Video screen
+import EditVideoScreen from '../screens/EditVideoScreen';
+
+// Import Highlight Viewer screen
+import HighlightViewerScreen from '../screens/HighlightViewerScreen';
+
 const Tab = createBottomTabNavigator();
 const ProfileStack = createNativeStackNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -90,6 +102,16 @@ const HomeStackNavigator = () => {
       <HomeStack.Screen
         name="OtherUserProfile"
         component={OtherUserProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="FollowersList"
+        component={FollowersListScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="VideoFeed"
+        component={VideoFeedScreen}
         options={{ headerShown: false }}
       />
     </HomeStack.Navigator>
@@ -162,6 +184,16 @@ const ProfileStackNavigator = () => {
       <ProfileStack.Screen
         name="BadgeApplication"
         component={BadgeApplicationScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="FollowersList"
+        component={FollowersListScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="VideoFeed"
+        component={VideoFeedScreen}
         options={{ headerShown: false }}
       />
     </ProfileStack.Navigator>
@@ -326,6 +358,42 @@ const RootStackNavigator = () => {
           options={{
             presentation: 'card',
             animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <RootStack.Screen
+          name="VideoFeed"
+          component={VideoFeedScreen}
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+            headerShown: false,
+          }}
+        />
+        <RootStack.Screen
+          name="FollowersList"
+          component={FollowersListScreen}
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <RootStack.Screen
+          name="EditVideo"
+          component={EditVideoScreen}
+          options={{
+            presentation: 'card',
+            animation: 'slide_from_right',
+            headerShown: false,
+          }}
+        />
+        <RootStack.Screen
+          name="HighlightViewer"
+          component={HighlightViewerScreen}
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
             headerShown: false,
           }}
         />

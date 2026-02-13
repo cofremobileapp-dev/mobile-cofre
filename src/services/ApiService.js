@@ -54,6 +54,20 @@ class ApiService {
           return Promise.reject(new Error('Unauthorized. Please check your session.'));
         }
 
+        // Handle 429 Too Many Requests - Rate limiting
+        if (error.response?.status === 429) {
+          console.warn('⚠️ [API] Rate limit exceeded (429)');
+          // Don't show alert for rate limiting on background requests
+          if (originalRequest._skipRetry) {
+            return Promise.reject(error);
+          }
+          // Create a more user-friendly error message
+          error.userMessage = 'Terlalu banyak permintaan. Silakan tunggu 30 detik sebelum mencoba lagi.';
+          error.isRateLimited = true;
+          error.retryAfter = error.response?.headers?.['retry-after'] || 30;
+          return Promise.reject(error);
+        }
+
         if (error.response) {
           // Server responded with error status
         } else if (error.request) {
@@ -143,9 +157,7 @@ class ApiService {
   // Special method for file uploads
   async uploadFile(url, formData, onUploadProgress = null) {
     const config = {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Don't set Content-Type header - axios will set it automatically with correct boundary
       timeout: API_CONFIG.TIMEOUT.UPLOAD, // Gunakan timeout dari config (3 menit)
     };
 
@@ -211,7 +223,7 @@ class ApiService {
     try {
       return await this.post('/search/log', { query, type }, {
         timeout: 5000, // 5 seconds timeout
-        _skipRetry: true, // Skip retry for logging
+        _skipRetry: true, // Skip retry for logging and rate limit alerts
       });
     } catch (error) {
       // Silent fail - logging shouldn't block user experience
@@ -246,7 +258,7 @@ class ApiService {
     try {
       return await this.post(`/videos/${videoId}/view`, {}, {
         timeout: 15000, // 15 seconds for view recording
-        _skipRetry: true, // Custom flag to skip retry logic
+        _skipRetry: true, // Custom flag to skip retry logic and rate limit alerts
       });
     } catch (error) {
       // Silently fail - view tracking shouldn't block user experience
@@ -280,7 +292,7 @@ class ApiService {
     try {
       return await this.post(`/stories/${storyId}/view`, {}, {
         timeout: 15000, // 15 seconds for view recording
-        _skipRetry: true, // Custom flag to skip retry logic
+        _skipRetry: true, // Custom flag to skip retry logic and rate limit alerts
       });
     } catch (error) {
       // Silently fail - view tracking shouldn't block user experience
@@ -291,6 +303,11 @@ class ApiService {
   // Likes
   async toggleLike(videoId) {
     return this.post(`/videos/${videoId}/like`);
+  }
+
+  // Update video details
+  async updateVideo(videoId, data) {
+    return this.put(`/videos/${videoId}`, data);
   }
 
   // Comments
@@ -318,6 +335,14 @@ class ApiService {
   // Follows
   async toggleFollow(userId) {
     return this.post(`/users/${userId}/follow`);
+  }
+
+  async getFollowers(userId, page = 1) {
+    return this.get(`/users/${userId}/followers?page=${page}`);
+  }
+
+  async getFollowing(userId, page = 1) {
+    return this.get(`/users/${userId}/following?page=${page}`);
   }
 
   // User Profiles

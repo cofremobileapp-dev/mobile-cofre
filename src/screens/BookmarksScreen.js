@@ -21,6 +21,7 @@ import StoryBar from '../components/Story/StoryBar';
 import StoryViewer from '../components/Story/StoryViewer';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 import useStories from '../hooks/useStories';
+import { formatPrice } from '../utils/formatUtils';
 
 const BookmarksScreen = ({ navigation }) => {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
@@ -149,9 +150,13 @@ const BookmarksScreen = ({ navigation }) => {
   };
 
   const handleVideoPress = (video) => {
-    // Show video preview modal directly
-    setSelectedVideo(video);
-    setShowVideoPreview(true);
+    // Navigate to full-screen video feed
+    const videoIndex = bookmarks.findIndex(v => v.id === video.id);
+    navigation.navigate('VideoFeed', {
+      videos: bookmarks,
+      initialIndex: videoIndex >= 0 ? videoIndex : 0,
+      title: 'Tersimpan',
+    });
   };
 
   const handleVideoPreviewClose = (wasDeleted) => {
@@ -175,7 +180,7 @@ const BookmarksScreen = ({ navigation }) => {
   };
 
   // Story handlers (removed useCallback to test)
-  const handleStoryPress = (storyIndex, userId) => {
+  const handleStoryPress = async (storyIndex, userId) => {
     console.log('📖 [BookmarksScreen] Story pressed:', {
       storyIndex,
       userId,
@@ -187,12 +192,31 @@ const BookmarksScreen = ({ navigation }) => {
       } : null,
     });
 
-    console.log('🔄 [BookmarksScreen] Setting story viewer state...');
-    console.log('🔄 [BookmarksScreen] Current showStoryViewer:', showStoryViewer);
+    // Validate story index - if invalid, try to refresh and find the story
+    if (storyIndex < 0 || storyIndex >= (stories?.length || 0) || !stories?.[storyIndex]) {
+      console.log('⚠️ [BookmarksScreen] Invalid story index, refreshing stories...');
 
+      // Refresh stories first
+      if (fetchStories) {
+        await fetchStories();
+      }
+
+      // Try to find the story again
+      const newIndex = stories?.findIndex(s => Number(s.user_id) === Number(userId));
+      if (newIndex >= 0 && stories?.[newIndex]) {
+        console.log('✅ [BookmarksScreen] Found story after refresh at index:', newIndex);
+        setSelectedStoryIndex(newIndex);
+        setShowStoryViewer(true);
+      } else {
+        console.log('❌ [BookmarksScreen] Story still not found after refresh');
+        Alert.alert('Story tidak ditemukan', 'Silakan coba lagi atau refresh halaman.');
+      }
+      return;
+    }
+
+    console.log('🔄 [BookmarksScreen] Setting story viewer state...');
     setSelectedStoryIndex(storyIndex);
     setShowStoryViewer(true);
-
     console.log('🔄 [BookmarksScreen] Called setShowStoryViewer(true)');
   };
 
@@ -232,18 +256,6 @@ const BookmarksScreen = ({ navigation }) => {
       console.warn('Error parsing menu_data in bookmarks:', error);
       menuData = {};
     }
-
-    const formatPrice = (price) => {
-      try {
-        return new Intl.NumberFormat('id-ID', {
-          style: 'currency',
-          currency: 'IDR',
-          minimumFractionDigits: 0,
-        }).format(price || 0);
-      } catch (error) {
-        return 'Rp 0';
-      }
-    };
 
     return (
       <TouchableOpacity

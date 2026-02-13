@@ -108,12 +108,7 @@ export const useStories = () => {
 
       console.log('📤 [useStories] Sending upload request...');
 
-      const response = await apiService.post('/stories/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 180000, // 3 minutes for large uploads
-      });
+      const response = await apiService.uploadStory(formData);
 
       console.log('📤 [useStories] Upload response:', {
         success: response.data?.success,
