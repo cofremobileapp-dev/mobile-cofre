@@ -154,18 +154,60 @@ class ApiService {
     return this.api.delete(url, config);
   }
 
-  // Special method for file uploads
+  // Special method for file uploads - uses fresh axios instance to avoid header conflicts
   async uploadFile(url, formData, onUploadProgress = null) {
-    const config = {
-      // Don't set Content-Type header - axios will set it automatically with correct boundary
-      timeout: API_CONFIG.TIMEOUT.UPLOAD, // Gunakan timeout dari config (3 menit)
-    };
+    // Create a fresh axios instance specifically for file uploads
+    // This avoids the default 'application/json' Content-Type header issue
+    const uploadInstance = axios.create({
+      baseURL: API_BASE_URL,
+      timeout: API_CONFIG.TIMEOUT.UPLOAD, // 3 minutes for uploads
+      headers: {
+        'Accept': 'application/json',
+        // DO NOT set Content-Type here - let axios auto-detect for FormData
+      },
+    });
 
-    if (onUploadProgress) {
-      config.onUploadProgress = onUploadProgress;
+    // Add auth token if available
+    if (this.authToken) {
+      uploadInstance.defaults.headers.common['Authorization'] = `Bearer ${this.authToken}`;
     }
 
-    return this.api.post(url, formData, config);
+    const config = {};
+
+    if (onUploadProgress) {
+      config.onUploadProgress = (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        console.log(`📤 [Upload] Progress: ${percentCompleted}%`);
+        onUploadProgress(progressEvent);
+      };
+    }
+
+    console.log('📤 [API] Uploading file to:', url);
+    console.log('📤 [API] Using fresh axios instance for multipart/form-data');
+
+    // Log FormData contents for debugging
+    if (formData._parts) {
+      formData._parts.forEach((part, index) => {
+        const [key, value] = part;
+        if (typeof value === 'object' && value.uri) {
+          console.log(`📤 [API] FormData[${index}]: ${key} = file(${value.name}, ${value.type})`);
+        } else {
+          console.log(`📤 [API] FormData[${index}]: ${key} = ${typeof value === 'string' ? value.substring(0, 50) + '...' : typeof value}`);
+        }
+      });
+    }
+
+    try {
+      const response = await uploadInstance.post(url, formData, config);
+      console.log('📥 [API] Upload success:', response.status);
+      return response;
+    } catch (error) {
+      console.error('📥 [API] Upload error:', error.message);
+      if (error.response) {
+        console.error('📥 [API] Server response:', error.response.status, error.response.data);
+      }
+      throw error;
+    }
   }
 
   // Health check method to verify backend connectivity

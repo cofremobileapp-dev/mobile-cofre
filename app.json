@@ -73,7 +73,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "508701b2-b716-4112-8f89-11bfe61ad1ef"
+        "projectId": "4856af3a-65be-4d4b-b88e-021eca7f66d1"
       }
     },
     "plugins": [
@@ -90,12 +90,12 @@
       "expo-asset",
       "expo-video"
     ],
-    "owner": "ardtys",
+    "owner": "cofreapps-organization",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/508701b2-b716-4112-8f89-11bfe61ad1ef"
+      "url": "https://u.expo.dev/4856af3a-65be-4d4b-b88e-021eca7f66d1"
     }
   }
 }

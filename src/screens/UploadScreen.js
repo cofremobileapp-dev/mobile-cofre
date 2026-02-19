@@ -13,6 +13,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -22,9 +23,13 @@ import { apiService } from '../services/ApiService';
 import { mediaUtils } from '../utils/mediaUtils';
 import UserTagInput from '../components/UserTagInput';
 import { formatPrice } from '../utils/formatUtils';
+import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const UploadScreen = () => {
   const navigation = useNavigation();
+  const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
   const [mediaUri, setMediaUri] = useState(null);
   const [mediaType, setMediaType] = useState(null); // 'video' or 'image'
   const [thumbnailUri, setThumbnailUri] = useState(null);
@@ -468,22 +473,23 @@ const UploadScreen = () => {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: isDark ? colors.background : '#EDE8D0' }]}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
     >
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.contentContainer}>
         {/* Media Picker */}
         {!mediaUri && (
           <TouchableOpacity
-            style={styles.videoPicker}
+            style={[styles.videoPicker, { backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC' }]}
             onPress={pickMedia}
             disabled={isUploading}
             activeOpacity={0.7}
           >
             <View style={styles.videoPickerContent}>
-              <Ionicons name="images-outline" size={48} color="#8D9F8E" />
-              <Text style={styles.videoPickerText}>Pilih Foto atau Video</Text>
+              <Ionicons name="images-outline" size={48} color={isDark ? colors.iconSecondary : '#8D9F8E'} />
+              <Text style={[styles.videoPickerText, { color: colors.textSecondary }]}>{t('selectMedia')}</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -523,9 +529,12 @@ const UploadScreen = () => {
         {/* Description */}
         <View style={styles.inputWrapper}>
           <TextInput
-            style={styles.descriptionInput}
-            placeholder="Ceritakan tentang makanan atau tempat ini..."
-            placeholderTextColor="#9CA3AF"
+            style={[styles.descriptionInput, {
+              backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC',
+              color: colors.textPrimary
+            }]}
+            placeholder={t('descriptionPlaceholder')}
+            placeholderTextColor={colors.textTertiary}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -538,39 +547,48 @@ const UploadScreen = () => {
         {/* Tags */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="pricetag-outline" size={20} color="#6B7280" />
-            <Text style={styles.sectionLabel}>Tags</Text>
+            <Ionicons name="pricetag-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('tags')}</Text>
           </View>
 
           <View style={styles.tagInputContainer}>
             <TextInput
-              style={styles.tagInput}
-              placeholder="Tambah tag..."
-              placeholderTextColor="#9CA3AF"
+              style={[styles.tagInput, {
+                backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC',
+                color: colors.textPrimary
+              }]}
+              placeholder={t('addTag')}
+              placeholderTextColor={colors.textTertiary}
               value={tagInput}
               onChangeText={setTagInput}
               editable={!isUploading}
               onSubmitEditing={handleAddTag}
             />
             <TouchableOpacity
-              style={styles.addTagButton}
+              style={[styles.addTagButton, {
+                backgroundColor: isDark ? colors.backgroundSecondary : '#FFFFFF',
+                borderColor: colors.border
+              }]}
               onPress={handleAddTag}
               disabled={isUploading || !tagInput.trim()}
             >
-              <Text style={styles.addTagButtonText}>Tambah</Text>
+              <Text style={[styles.addTagButtonText, { color: colors.textPrimary }]}>{t('add')}</Text>
             </TouchableOpacity>
           </View>
 
           {tags.length > 0 && (
             <View style={styles.tagsContainer}>
               {tags.map((tag, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
+                <View key={index} style={[styles.tag, {
+                  backgroundColor: isDark ? colors.backgroundSecondary : '#FFFFFF',
+                  borderColor: colors.border
+                }]}>
+                  <Text style={[styles.tagText, { color: colors.textPrimary }]}>{tag}</Text>
                   <TouchableOpacity
                     onPress={() => handleRemoveTag(tag)}
                     disabled={isUploading}
                   >
-                    <Ionicons name="close-circle" size={18} color="#6B7280" />
+                    <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -583,38 +601,38 @@ const UploadScreen = () => {
           {/* Budget */}
           <View style={styles.halfWidth}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="cash-outline" size={20} color="#6B7280" />
-              <Text style={styles.sectionLabel}>Budget</Text>
+              <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('budget')}</Text>
             </View>
             <TouchableOpacity
-              style={styles.pickerButton}
+              style={[styles.pickerButton, { backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC' }]}
               onPress={() => setShowBudgetModal(true)}
               disabled={isUploading}
               activeOpacity={0.7}
             >
-              <Text style={budget ? styles.pickerButtonTextSelected : styles.pickerButtonText}>
-                {budget ? budgetOptions.find(o => o.value === budget)?.label : 'Pilih budget'}
+              <Text style={budget ? [styles.pickerButtonTextSelected, { color: colors.textPrimary }] : [styles.pickerButtonText, { color: colors.textTertiary }]}>
+                {budget ? budgetOptions.find(o => o.value === budget)?.label : t('selectBudget')}
               </Text>
-              <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Time */}
           <View style={styles.halfWidth}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="time-outline" size={20} color="#6B7280" />
-              <Text style={styles.sectionLabel}>Waktu</Text>
+              <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('time')}</Text>
             </View>
             <TouchableOpacity
-              style={styles.pickerButton}
+              style={[styles.pickerButton, { backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC' }]}
               onPress={() => setShowTimeModal(true)}
               disabled={isUploading}
               activeOpacity={0.7}
             >
-              <Text style={time ? styles.pickerButtonTextSelected : styles.pickerButtonText}>
-                {time ? timeOptions.find(o => o.value === time)?.label : 'Pilih waktu'}
+              <Text style={time ? [styles.pickerButtonTextSelected, { color: colors.textPrimary }] : [styles.pickerButtonText, { color: colors.textTertiary }]}>
+                {time ? timeOptions.find(o => o.value === time)?.label : t('selectTime')}
               </Text>
-              <Ionicons name="chevron-down" size={20} color="#6B7280" />
+              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -627,11 +645,11 @@ const UploadScreen = () => {
           onRequestClose={() => setShowBudgetModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Pilih Budget</Text>
+            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('selectBudget')}</Text>
                 <TouchableOpacity onPress={() => setShowBudgetModal(false)}>
-                  <Ionicons name="close" size={24} color="#1F2937" />
+                  <Ionicons name="close" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
               </View>
               <FlatList
@@ -639,16 +657,16 @@ const UploadScreen = () => {
                 keyExtractor={(item) => item.value}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.modalItem}
+                    style={[styles.modalItem, { borderBottomColor: colors.borderLight }]}
                     onPress={() => {
                       setBudget(item.value);
                       setShowBudgetModal(false);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.modalItemText}>{item.label}</Text>
+                    <Text style={[styles.modalItemText, { color: colors.textPrimary }]}>{item.label}</Text>
                     {budget === item.value && (
-                      <Ionicons name="checkmark" size={24} color="#8D9F8E" />
+                      <Ionicons name="checkmark" size={24} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -665,11 +683,11 @@ const UploadScreen = () => {
           onRequestClose={() => setShowTimeModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Pilih Waktu</Text>
+            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('selectTime')}</Text>
                 <TouchableOpacity onPress={() => setShowTimeModal(false)}>
-                  <Ionicons name="close" size={24} color="#1F2937" />
+                  <Ionicons name="close" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
               </View>
               <FlatList
@@ -677,16 +695,16 @@ const UploadScreen = () => {
                 keyExtractor={(item) => item.value}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.modalItem}
+                    style={[styles.modalItem, { borderBottomColor: colors.borderLight }]}
                     onPress={() => {
                       setTime(item.value);
                       setShowTimeModal(false);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.modalItemText}>{item.label}</Text>
+                    <Text style={[styles.modalItemText, { color: colors.textPrimary }]}>{item.label}</Text>
                     {time === item.value && (
-                      <Ionicons name="checkmark" size={24} color="#8D9F8E" />
+                      <Ionicons name="checkmark" size={24} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -698,13 +716,16 @@ const UploadScreen = () => {
         {/* Location */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="location-outline" size={20} color="#6B7280" />
-            <Text style={styles.sectionLabel}>Lokasi (opsional)</Text>
+            <Ionicons name="location-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('location')}</Text>
           </View>
           <TextInput
-            style={styles.locationInput}
-            placeholder="Nama tempat atau alamat..."
-            placeholderTextColor="#9CA3AF"
+            style={[styles.locationInput, {
+              backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC',
+              color: colors.textPrimary
+            }]}
+            placeholder={t('locationPlaceholder')}
+            placeholderTextColor={colors.textTertiary}
             value={location}
             onChangeText={setLocation}
             editable={!isUploading}
@@ -713,28 +734,28 @@ const UploadScreen = () => {
 
         {/* Playlist Selection */}
         <TouchableOpacity
-          style={styles.inputContainer}
+          style={[styles.inputContainer, { backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC' }]}
           onPress={() => setShowPlaylistModal(true)}
         >
           <View style={styles.inputRow}>
-            <Ionicons name="albums-outline" size={20} color="#06402B" />
-            <Text style={styles.inputLabel}>Tambah ke Playlist</Text>
+            <Ionicons name="albums-outline" size={20} color={colors.primary} />
+            <Text style={[styles.inputLabel, { color: colors.primary }]}>{t('addToPlaylist')}</Text>
           </View>
           <View style={styles.inputValueContainer}>
-            <Text style={styles.inputValue}>
+            <Text style={[styles.inputValue, { color: colors.textSecondary }]}>
               {selectedPlaylistIds.length > 0
-                ? `${selectedPlaylistIds.length} playlist dipilih`
-                : 'Pilih playlist'}
+                ? `${selectedPlaylistIds.length} ${t('playlistsSelected')}`
+                : t('selectPlaylist')}
             </Text>
-            <Ionicons name="chevron-forward" size={20} color="#999999" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
           </View>
         </TouchableOpacity>
 
         {/* Recipe Details Section */}
-        <View style={styles.recipeSection}>
+        <View style={[styles.recipeSection, { backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC' }]}>
           <View style={styles.recipeSectionHeader}>
-            <Ionicons name="restaurant" size={22} color="#06402B" />
-            <Text style={styles.recipeSectionTitle}>Detail Resep (opsional)</Text>
+            <Ionicons name="restaurant" size={22} color={colors.primary} />
+            <Text style={[styles.recipeSectionTitle, { color: colors.primary }]}>{t('recipeDetails')}</Text>
             {aiResult && aiResult.is_food && (
               <View style={styles.aiBadge}>
                 <Ionicons name="sparkles" size={12} color="#8B5CF6" />
@@ -742,20 +763,24 @@ const UploadScreen = () => {
               </View>
             )}
           </View>
-          <Text style={styles.recipeSectionSubtitle}>
+          <Text style={[styles.recipeSectionSubtitle, { color: colors.textSecondary }]}>
             {aiResult && aiResult.is_food
-              ? '✨ Data telah terisi otomatis oleh AI. Anda dapat mengedit sesuai kebutuhan.'
-              : 'Tambahkan detail resep agar viewer dapat melihat informasi lengkap'
+              ? `✨ ${t('recipeDetailsAiDesc')}`
+              : t('recipeDetailsDesc')
             }
           </Text>
 
           {/* Menu Name */}
           <View style={styles.recipeInputGroup}>
-            <Text style={styles.recipeLabel}>Nama Menu</Text>
+            <Text style={[styles.recipeLabel, { color: colors.textPrimary }]}>{t('menuName')}</Text>
             <TextInput
-              style={styles.recipeInput}
+              style={[styles.recipeInput, {
+                backgroundColor: isDark ? colors.backgroundTertiary : '#FFFFFF',
+                color: colors.textPrimary,
+                borderColor: colors.border
+              }]}
               placeholder="Contoh: Kucing masak"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textTertiary}
               value={menuName}
               onChangeText={setMenuName}
               editable={!isUploading}
@@ -765,11 +790,15 @@ const UploadScreen = () => {
           {/* Price and Servings Row */}
           <View style={styles.row}>
             <View style={styles.halfWidth}>
-              <Text style={styles.recipeLabel}>Harga</Text>
+              <Text style={[styles.recipeLabel, { color: colors.textPrimary }]}>{t('price')}</Text>
               <TextInput
-                style={styles.recipeInput}
+                style={[styles.recipeInput, {
+                  backgroundColor: isDark ? colors.backgroundTertiary : '#FFFFFF',
+                  color: colors.textPrimary,
+                  borderColor: colors.border
+                }]}
                 placeholder="Rp 10.000"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textTertiary}
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="default"
@@ -777,11 +806,15 @@ const UploadScreen = () => {
               />
             </View>
             <View style={styles.halfWidth}>
-              <Text style={styles.recipeLabel}>Porsi</Text>
+              <Text style={[styles.recipeLabel, { color: colors.textPrimary }]}>{t('servings')}</Text>
               <TextInput
-                style={styles.recipeInput}
+                style={[styles.recipeInput, {
+                  backgroundColor: isDark ? colors.backgroundTertiary : '#FFFFFF',
+                  color: colors.textPrimary,
+                  borderColor: colors.border
+                }]}
                 placeholder="2-3 orang"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textTertiary}
                 value={servings}
                 onChangeText={setServings}
                 editable={!isUploading}
@@ -791,11 +824,15 @@ const UploadScreen = () => {
 
           {/* Ingredients */}
           <View style={styles.recipeInputGroup}>
-            <Text style={styles.recipeLabel}>Alat dan Bahan</Text>
+            <Text style={[styles.recipeLabel, { color: colors.textPrimary }]}>{t('ingredients')}</Text>
             <TextInput
-              style={[styles.recipeInput, styles.recipeMultilineInput]}
+              style={[styles.recipeInput, styles.recipeMultilineInput, {
+                backgroundColor: isDark ? colors.backgroundTertiary : '#FFFFFF',
+                color: colors.textPrimary,
+                borderColor: colors.border
+              }]}
               placeholder={"Contoh:\n• 2 butir telur\n• 100ml susu cair\n• 50g tepung terigu"}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textTertiary}
               value={ingredients}
               onChangeText={setIngredients}
               multiline
@@ -807,11 +844,15 @@ const UploadScreen = () => {
 
           {/* Steps */}
           <View style={styles.recipeInputGroup}>
-            <Text style={styles.recipeLabel}>Cara Pembuatan</Text>
+            <Text style={[styles.recipeLabel, { color: colors.textPrimary }]}>{t('cookingSteps')}</Text>
             <TextInput
-              style={[styles.recipeInput, styles.recipeMultilineInput]}
+              style={[styles.recipeInput, styles.recipeMultilineInput, {
+                backgroundColor: isDark ? colors.backgroundTertiary : '#FFFFFF',
+                color: colors.textPrimary,
+                borderColor: colors.border
+              }]}
               placeholder={"Contoh:\n1. Kocok telur dan susu\n2. Tambahkan tepung, aduk rata\n3. Panaskan wajan, tuang adonan\n4. Masak hingga matang"}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textTertiary}
               value={steps}
               onChangeText={setSteps}
               multiline
@@ -827,13 +868,13 @@ const UploadScreen = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         >
-          <View style={styles.tagUsersSection}>
+          <View style={[styles.tagUsersSection, { backgroundColor: isDark ? colors.backgroundSecondary : '#D9D4BC' }]}>
             <View style={styles.tagUsersSectionHeader}>
-              <Ionicons name="people" size={22} color="#06402B" />
-              <Text style={styles.tagUsersSectionTitle}>Tag Teman (opsional)</Text>
+              <Ionicons name="people" size={22} color={colors.primary} />
+              <Text style={[styles.tagUsersSectionTitle, { color: colors.primary }]}>{t('tagFriends')}</Text>
             </View>
-            <Text style={styles.tagUsersSectionSubtitle}>
-              Tag teman yang ada di foto/video ini. Mereka akan menerima notifikasi.
+            <Text style={[styles.tagUsersSectionSubtitle, { color: colors.textSecondary }]}>
+              {t('tagFriendsDesc')}
             </Text>
             <UserTagInput
               selectedUsers={taggedUsers}
@@ -852,7 +893,7 @@ const UploadScreen = () => {
 
         {/* Upload Button */}
         <TouchableOpacity
-          style={[styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
+          style={[styles.uploadButton, { backgroundColor: colors.primary }, isUploading && styles.uploadButtonDisabled]}
           onPress={handleUpload}
           disabled={isUploading}
           activeOpacity={0.8}
@@ -861,11 +902,11 @@ const UploadScreen = () => {
             <View style={styles.uploadingContainer}>
               <ActivityIndicator color="#FFFFFF" size="small" />
               <Text style={styles.uploadButtonText}>
-                Uploading...
+                {t('uploading')}
               </Text>
             </View>
           ) : (
-            <Text style={styles.uploadButtonText}>Upload Konten</Text>
+            <Text style={styles.uploadButtonText}>{t('uploadContent')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -878,48 +919,48 @@ const UploadScreen = () => {
         onRequestClose={() => setShowPlaylistModal(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Pilih Playlist</Text>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('selectPlaylist')}</Text>
               <TouchableOpacity onPress={() => setShowPlaylistModal(false)}>
-                <Ionicons name="close" size={24} color="#000000" />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
             {isLoadingPlaylists ? (
-              <ActivityIndicator size="large" color="#06402B" style={{ marginVertical: 20 }} />
+              <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
             ) : playlists.length > 0 ? (
               <FlatList
                 data={playlists}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={styles.playlistItem}
+                    style={[styles.playlistItem, { borderBottomColor: colors.borderLight }]}
                     onPress={() => togglePlaylistSelection(item.id)}
                   >
                     <View style={styles.playlistInfo}>
-                      <Ionicons name="albums" size={20} color="#06402B" />
-                      <Text style={styles.playlistName}>{item.name}</Text>
+                      <Ionicons name="albums" size={20} color={colors.primary} />
+                      <Text style={[styles.playlistName, { color: colors.textPrimary }]}>{item.name}</Text>
                     </View>
                     <Ionicons
                       name={selectedPlaylistIds.includes(item.id) ? "checkbox" : "square-outline"}
                       size={24}
-                      color={selectedPlaylistIds.includes(item.id) ? "#06402B" : "#999999"}
+                      color={selectedPlaylistIds.includes(item.id) ? colors.primary : colors.textTertiary}
                     />
                   </TouchableOpacity>
                 )}
               />
             ) : (
-              <Text style={styles.emptyPlaylistText}>
-                Belum ada playlist. Buat playlist terlebih dahulu di halaman profil.
+              <Text style={[styles.emptyPlaylistText, { color: colors.textTertiary }]}>
+                {t('noPlaylists')}
               </Text>
             )}
 
             <TouchableOpacity
-              style={styles.modalButton}
+              style={[styles.modalButton, { backgroundColor: colors.primary }]}
               onPress={() => setShowPlaylistModal(false)}
             >
-              <Text style={styles.modalButtonText}>Selesai</Text>
+              <Text style={styles.modalButtonText}>{t('done')}</Text>
             </TouchableOpacity>
           </View>
         </View>

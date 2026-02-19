@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { apiService } from '../services/ApiService';
+import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const LANGUAGES = [
   {
@@ -31,123 +32,107 @@ const LANGUAGES = [
 
 const LanguageScreen = () => {
   const navigation = useNavigation();
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedLanguage, setSelectedLanguage] = useState('id');
+  const { isDark, colors } = useTheme();
+  const { language, setLanguage, t, isLoading: isLanguageLoading } = useLanguage();
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
-    try {
-      setIsLoading(true);
-      const response = await apiService.getSettings();
-      const language = response.data.settings?.language || 'id';
-      setSelectedLanguage(language);
-    } catch (error) {
-      console.error('Error loading settings:', error);
-      Alert.alert('Error', 'Gagal memuat pengaturan');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleSelectLanguage = async (languageCode) => {
-    if (languageCode === selectedLanguage) return;
+    if (languageCode === language) return;
 
     try {
       setIsSaving(true);
-      setSelectedLanguage(languageCode);
+      const success = await setLanguage(languageCode);
 
-      const response = await apiService.updateLanguage(languageCode);
-
-      if (response.data.success) {
+      if (success) {
         Alert.alert(
-          'Berhasil',
-          'Bahasa aplikasi akan berubah setelah aplikasi direstart',
+          t('success'),
+          t('languageChangeSuccess'),
           [
             {
-              text: 'OK',
+              text: t('ok'),
               onPress: () => navigation.goBack(),
             },
           ]
         );
+      } else {
+        Alert.alert(t('error'), t('languageChangeFailed'));
       }
     } catch (error) {
       console.error('Error updating language:', error);
-      // Revert on error
-      const response = await apiService.getSettings();
-      setSelectedLanguage(response.data.settings?.language || 'id');
-      Alert.alert('Error', 'Gagal mengubah bahasa');
+      Alert.alert(t('error'), t('languageChangeFailed'));
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (isLoading) {
+  if (isLanguageLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.backgroundSecondary }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#000000" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Bahasa / Language</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('languageSettings')}</Text>
           <View style={styles.placeholder} />
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#06402B" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.backgroundSecondary }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#000000" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Bahasa / Language</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('languageSettings')}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Ionicons name="globe" size={24} color="#06402B" />
-          <Text style={styles.infoText}>
-            Pilih bahasa yang ingin Anda gunakan di aplikasi
+        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="globe" size={24} color={colors.primary} />
+          <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+            {t('languageSelectDesc')}
           </Text>
         </View>
 
         {/* Language Options */}
-        <View style={styles.section}>
-          {LANGUAGES.map((language) => (
+        <View style={[styles.section, { backgroundColor: colors.background }]}>
+          {LANGUAGES.map((lang) => (
             <TouchableOpacity
-              key={language.code}
+              key={lang.code}
               style={[
                 styles.languageItem,
-                selectedLanguage === language.code && styles.selectedLanguage,
+                { borderTopColor: colors.borderLight },
+                language === lang.code && { backgroundColor: colors.primaryLight },
               ]}
-              onPress={() => handleSelectLanguage(language.code)}
+              onPress={() => handleSelectLanguage(lang.code)}
               disabled={isSaving}
             >
               <View style={styles.languageInfo}>
-                <Text style={styles.flagEmoji}>{language.flag}</Text>
+                <Text style={styles.flagEmoji}>{lang.flag}</Text>
                 <View style={styles.languageText}>
-                  <Text style={styles.languageName}>{language.name}</Text>
-                  <Text style={styles.languageNative}>{language.nativeName}</Text>
+                  <Text style={[styles.languageName, { color: colors.textPrimary }]}>{lang.name}</Text>
+                  <Text style={[styles.languageNative, { color: colors.textTertiary }]}>{lang.nativeName}</Text>
                 </View>
               </View>
 
-              {selectedLanguage === language.code && (
+              {language === lang.code && (
                 <View style={styles.checkmark}>
-                  <Ionicons name="checkmark-circle" size={24} color="#06402B" />
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                  )}
                 </View>
               )}
             </TouchableOpacity>
@@ -155,13 +140,12 @@ const LanguageScreen = () => {
         </View>
 
         {/* Note */}
-        <View style={styles.noteCard}>
-          <Ionicons name="information-circle" size={20} color="#2563EB" />
+        <View style={[styles.noteCard, { backgroundColor: isDark ? colors.card : '#EFF6FF', borderColor: isDark ? colors.border : '#BFDBFE' }]}>
+          <Ionicons name="information-circle" size={20} color={isDark ? colors.info : '#2563EB'} />
           <View style={styles.noteTextContainer}>
-            <Text style={styles.noteTitle}>Catatan</Text>
-            <Text style={styles.noteText}>
-              Perubahan bahasa akan diterapkan setelah Anda me-restart aplikasi. Beberapa
-              bagian mungkin masih menggunakan bahasa sebelumnya hingga restart.
+            <Text style={[styles.noteTitle, { color: isDark ? colors.textPrimary : '#1E40AF' }]}>{t('languageNote')}</Text>
+            <Text style={[styles.noteText, { color: isDark ? colors.textSecondary : '#1E40AF' }]}>
+              {t('languageNoteDesc')}
             </Text>
           </View>
         </View>
@@ -173,7 +157,6 @@ const LanguageScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
     flexDirection: 'row',
@@ -181,9 +164,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   backButton: {
     padding: 4,
@@ -192,7 +173,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#000000',
     flex: 1,
     textAlign: 'center',
   },
@@ -208,7 +188,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoCard: {
-    backgroundColor: '#FFFFFF',
     margin: 16,
     marginBottom: 8,
     padding: 16,
@@ -216,17 +195,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   infoText: {
     fontSize: 14,
-    color: '#4B5563',
     lineHeight: 20,
     marginLeft: 12,
     flex: 1,
   },
   section: {
-    backgroundColor: '#FFFFFF',
     marginTop: 12,
     paddingVertical: 8,
   },
@@ -237,10 +213,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  selectedLanguage: {
-    backgroundColor: '#E8F5E9',
   },
   languageInfo: {
     flexDirection: 'row',
@@ -257,18 +229,15 @@ const styles = StyleSheet.create({
   languageName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000000',
     marginBottom: 4,
   },
   languageNative: {
     fontSize: 14,
-    color: '#6B7280',
   },
   checkmark: {
     marginLeft: 12,
   },
   noteCard: {
-    backgroundColor: '#EFF6FF',
     margin: 16,
     marginTop: 12,
     padding: 16,
@@ -276,7 +245,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
   },
   noteTextContainer: {
     flex: 1,
@@ -285,12 +253,10 @@ const styles = StyleSheet.create({
   noteTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1E40AF',
     marginBottom: 6,
   },
   noteText: {
     fontSize: 14,
-    color: '#1E40AF',
     lineHeight: 20,
   },
 });
