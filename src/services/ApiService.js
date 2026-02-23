@@ -154,57 +154,77 @@ class ApiService {
     return this.api.delete(url, config);
   }
 
-  // Special method for file uploads - uses fresh axios instance to avoid header conflicts
+  // Special method for file uploads - uses native fetch for better React Native compatibility
   async uploadFile(url, formData, onUploadProgress = null) {
-    // Create a fresh axios instance specifically for file uploads
-    // This avoids the default 'application/json' Content-Type header issue
-    const uploadInstance = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: API_CONFIG.TIMEOUT.UPLOAD, // 3 minutes for uploads
-      headers: {
-        'Accept': 'application/json',
-        // DO NOT set Content-Type here - let axios auto-detect for FormData
-      },
-    });
-
-    // Add auth token if available
-    if (this.authToken) {
-      uploadInstance.defaults.headers.common['Authorization'] = `Bearer ${this.authToken}`;
-    }
-
-    const config = {};
-
-    if (onUploadProgress) {
-      config.onUploadProgress = (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        console.log(`📤 [Upload] Progress: ${percentCompleted}%`);
-        onUploadProgress(progressEvent);
-      };
-    }
-
-    console.log('📤 [API] Uploading file to:', url);
-    console.log('📤 [API] Using fresh axios instance for multipart/form-data');
+    console.log('📤 [API] Starting upload to:', url);
+    console.log('📤 [API] Full URL:', `${API_BASE_URL}${url}`);
+    console.log('📤 [API] Auth token present:', !!this.authToken);
 
     // Log FormData contents for debugging
     if (formData._parts) {
+      console.log('📤 [API] FormData contents:');
       formData._parts.forEach((part, index) => {
         const [key, value] = part;
         if (typeof value === 'object' && value.uri) {
-          console.log(`📤 [API] FormData[${index}]: ${key} = file(${value.name}, ${value.type})`);
+          console.log(`  [${index}] ${key}: FILE(uri=${value.uri?.substring(0, 80)}, name=${value.name}, type=${value.type})`);
         } else {
-          console.log(`📤 [API] FormData[${index}]: ${key} = ${typeof value === 'string' ? value.substring(0, 50) + '...' : typeof value}`);
+          const displayValue = typeof value === 'string' ? value.substring(0, 100) : typeof value;
+          console.log(`  [${index}] ${key}: ${displayValue}`);
         }
       });
     }
 
+    // Build headers - DO NOT set Content-Type for multipart/form-data
+    // React Native's fetch will automatically set the correct Content-Type with boundary
+    const headers = {
+      'Accept': 'application/json',
+    };
+
+    // Add auth token
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
+
     try {
-      const response = await uploadInstance.post(url, formData, config);
-      console.log('📥 [API] Upload success:', response.status);
-      return response;
+      console.log('📤 [API] Sending fetch request...');
+
+      // Use native fetch for better FormData handling in React Native
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        method: 'POST',
+        headers: headers,
+        body: formData,
+      });
+
+      console.log('📥 [API] Response status:', response.status);
+
+      // Parse response
+      const responseText = await response.text();
+      console.log('📥 [API] Response text (first 500 chars):', responseText.substring(0, 500));
+
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        console.error('📥 [API] Failed to parse JSON response:', e.message);
+        throw new Error(`Server returned invalid JSON: ${responseText.substring(0, 200)}`);
+      }
+
+      if (!response.ok) {
+        // Server returned an error
+        console.error('📥 [API] Server error:', response.status, responseData);
+        const error = new Error(responseData.message || 'Upload failed');
+        error.response = { status: response.status, data: responseData };
+        throw error;
+      }
+
+      console.log('📥 [API] Upload success!');
+      return { data: responseData, status: response.status };
+
     } catch (error) {
       console.error('📥 [API] Upload error:', error.message);
       if (error.response) {
-        console.error('📥 [API] Server response:', error.response.status, error.response.data);
+        console.error('📥 [API] Response status:', error.response.status);
+        console.error('📥 [API] Response data:', JSON.stringify(error.response.data, null, 2));
       }
       throw error;
     }

@@ -49,6 +49,55 @@ export const useStories = () => {
   }, []);
 
   /**
+   * Helper function to get MIME type from URI
+   */
+  const getMimeType = (uri, mediaType) => {
+    // Extract extension from URI - handle various formats
+    let ext = '';
+
+    // Try to get extension from URI
+    if (uri) {
+      // Remove query params and hash
+      const cleanUri = uri.split('?')[0].split('#')[0];
+      // Get the last part after the last dot
+      const parts = cleanUri.split('.');
+      if (parts.length > 1) {
+        ext = parts[parts.length - 1].toLowerCase();
+      }
+    }
+
+    // MIME type mapping
+    const mimeMap = {
+      // Images
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      heic: 'image/heic',
+      heif: 'image/heif',
+      // Videos
+      mp4: 'video/mp4',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      m4v: 'video/x-m4v',
+      '3gp': 'video/3gpp',
+      webm: 'video/webm',
+    };
+
+    // If we found an extension and it's in our map, use it
+    if (ext && mimeMap[ext]) {
+      return { mimeType: mimeMap[ext], extension: ext };
+    }
+
+    // Fallback based on mediaType
+    if (mediaType === 'video') {
+      return { mimeType: 'video/mp4', extension: 'mp4' };
+    }
+    return { mimeType: 'image/jpeg', extension: 'jpg' };
+  };
+
+  /**
    * Upload and create a new story
    */
   const uploadStory = useCallback(async (mediaUri, mediaType, options = {}) => {
@@ -57,49 +106,43 @@ export const useStories = () => {
       setError(null);
 
       console.log('📤 [useStories] Starting story upload:', {
-        mediaUri: mediaUri?.substring(0, 50) + '...',
+        mediaUri: mediaUri?.substring(0, 80),
         mediaType,
         options: { ...options, text_elements: options.text_elements ? 'present' : 'none' },
+      });
+
+      // Validate mediaUri
+      if (!mediaUri) {
+        throw new Error('Media URI is required');
+      }
+
+      // Get MIME type and extension
+      const { mimeType, extension } = getMimeType(mediaUri, mediaType);
+
+      console.log('📤 [useStories] File info:', {
+        mimeType,
+        extension,
+        uriPrefix: mediaUri.substring(0, 20),
       });
 
       // Create FormData
       const formData = new FormData();
 
-      // Get file extension - handle various URI formats
-      let fileExtension = 'jpg';
-      if (mediaUri) {
-        const uriParts = mediaUri.split('.');
-        if (uriParts.length > 1) {
-          fileExtension = uriParts[uriParts.length - 1].split('?')[0]; // Remove query params
-        }
-      }
-
-      // Determine MIME type based on media type
-      let mimeType = 'image/jpeg';
-      if (mediaType === 'video') {
-        mimeType = 'video/mp4';
-        if (fileExtension === 'mov') mimeType = 'video/quicktime';
-        if (fileExtension === 'avi') mimeType = 'video/x-msvideo';
-      } else {
-        if (fileExtension === 'png') mimeType = 'image/png';
-        if (fileExtension === 'gif') mimeType = 'image/gif';
-        if (fileExtension === 'webp') mimeType = 'image/webp';
-      }
-
-      console.log('📤 [useStories] File info:', { fileExtension, mimeType });
-
+      // CRITICAL: Append file with correct format for React Native
+      // The object must have: uri, type, name
+      // DO NOT strip file:// prefix - React Native needs it
       formData.append('media', {
         uri: mediaUri,
         type: mimeType,
-        name: `story-${Date.now()}.${fileExtension}`
+        name: `story_${Date.now()}.${extension}`,
       });
 
+      // Add other fields
       formData.append('media_type', mediaType);
       formData.append('duration', String(options.duration || (mediaType === 'video' ? 15 : 5)));
 
       if (options.caption) formData.append('caption', options.caption);
       if (options.stickers) formData.append('stickers', JSON.stringify(options.stickers));
-      // text_elements already JSON stringified in StoryPreviewScreen
       if (options.text_elements) formData.append('text_elements', options.text_elements);
       if (options.filter) formData.append('filter', options.filter);
       if (options.allowResharing !== undefined) {

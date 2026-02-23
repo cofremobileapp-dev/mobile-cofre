@@ -372,27 +372,71 @@ const UploadScreen = () => {
     setIsUploading(true);
 
     try {
+      console.log('📤 [Upload] Starting upload process...');
+      console.log('📤 [Upload] Media URI:', mediaUri);
+      console.log('📤 [Upload] Thumbnail URI:', thumbnailUri);
+      console.log('📤 [Upload] Media Type:', mediaType);
+
       const formData = new FormData();
 
-      // Upload media based on type
-      if (mediaType === 'video') {
-        formData.append('video', {
-          uri: mediaUri,
-          type: 'video/mp4',
-          name: `video_${Date.now()}.mp4`,
-        });
-      } else if (mediaType === 'image') {
-        formData.append('video', {
-          uri: mediaUri,
-          type: 'image/jpeg',
-          name: `image_${Date.now()}.jpg`,
-        });
-      }
+      // Helper to get MIME type from URI
+      const getMimeType = (uri, defaultType) => {
+        if (!uri) return defaultType;
+        const cleanUri = uri.split('?')[0].split('#')[0];
+        const ext = cleanUri.split('.').pop()?.toLowerCase();
+        const mimeMap = {
+          jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+          gif: 'image/gif', webp: 'image/webp', heic: 'image/heic',
+          mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo',
+          '3gp': 'video/3gpp', mkv: 'video/x-matroska',
+        };
+        return mimeMap[ext] || defaultType;
+      };
+
+      // Get file extension from URI
+      const getExtension = (uri, defaultExt) => {
+        if (!uri) return defaultExt;
+        const cleanUri = uri.split('?')[0].split('#')[0];
+        const ext = cleanUri.split('.').pop()?.toLowerCase();
+        const validExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'mp4', 'mov', 'avi', '3gp', 'mkv'];
+        return validExts.includes(ext) ? ext : defaultExt;
+      };
+
+      // Normalize URI for React Native (ensure proper format)
+      const normalizeUri = (uri) => {
+        if (!uri) return uri;
+        // On Android, content:// URIs are fine
+        // On iOS, file:// or ph:// URIs are fine
+        // Don't modify the URI - React Native handles it
+        return uri;
+      };
+
+      // Prepare video/image file
+      const normalizedMediaUri = normalizeUri(mediaUri);
+      const mediaMimeType = getMimeType(mediaUri, mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+      const mediaExt = getExtension(mediaUri, mediaType === 'video' ? 'mp4' : 'jpg');
+      const mediaFileName = `${mediaType}_${Date.now()}.${mediaExt}`;
+
+      console.log('📤 [Upload] Media file:', { uri: normalizedMediaUri?.substring(0, 80), type: mediaMimeType, name: mediaFileName });
+
+      formData.append('video', {
+        uri: normalizedMediaUri,
+        type: mediaMimeType,
+        name: mediaFileName,
+      });
+
+      // Prepare thumbnail file
+      const normalizedThumbUri = normalizeUri(thumbnailUri);
+      const thumbMimeType = getMimeType(thumbnailUri, 'image/jpeg');
+      const thumbExt = getExtension(thumbnailUri, 'jpg');
+      const thumbFileName = `thumbnail_${Date.now()}.${thumbExt}`;
+
+      console.log('📤 [Upload] Thumbnail file:', { uri: normalizedThumbUri?.substring(0, 80), type: thumbMimeType, name: thumbFileName });
 
       formData.append('thumbnail', {
-        uri: thumbnailUri,
-        type: 'image/jpeg',
-        name: `thumbnail_${Date.now()}.jpg`,
+        uri: normalizedThumbUri,
+        type: thumbMimeType,
+        name: thumbFileName,
       });
 
       const menuData = {
@@ -462,9 +506,30 @@ const UploadScreen = () => {
       setTaggedUsers([]);
       setSelectedPlaylistIds([]);
     } catch (error) {
-      console.error('Upload error:', error);
-      const errorMessage = error.response?.data?.message || 'Gagal mengupload. Silakan coba lagi.';
-      Alert.alert('Error', errorMessage);
+      console.error('❌ Upload error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      console.error('❌ Error message:', error.message);
+
+      // Build detailed error message
+      let errorMessage = 'Gagal mengupload. Silakan coba lagi.';
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        // Laravel validation errors
+        const errors = error.response.data.errors;
+        const firstError = Object.values(errors).flat()[0];
+        errorMessage = firstError || errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // Show detailed alert for debugging
+      Alert.alert(
+        'Error Upload',
+        `${errorMessage}\n\n(Status: ${error.response?.status || 'N/A'})`
+      );
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
