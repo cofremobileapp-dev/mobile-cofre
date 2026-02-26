@@ -9,16 +9,40 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   clear: jest.fn(() => Promise.resolve()),
 }));
 
-// Mock NetInfo
+// Mock NetInfo (virtual module - not installed but may be referenced)
 jest.mock('@react-native-community/netinfo', () => ({
   addEventListener: jest.fn(() => jest.fn()),
   fetch: jest.fn(() => Promise.resolve({
     isConnected: true,
     type: 'wifi',
   })),
-}));
+}), { virtual: true });
 
 // Mock Expo modules
+jest.mock('expo-constants', () => ({
+  expoConfig: {
+    extra: {
+      localApiUrl: 'http://localhost:8000/api',
+      productionApiUrl: 'https://cofremobileapp.my.id/api',
+    },
+  },
+}));
+
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  getExpoPushTokenAsync: jest.fn(() => Promise.resolve({ data: 'ExponentPushToken[xxx]' })),
+  setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  AndroidImportance: { MAX: 5 },
+}));
+
+jest.mock('expo-device', () => ({
+  isDevice: true,
+}));
+
 jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn(() => Promise.resolve()),
   getItemAsync: jest.fn(() => Promise.resolve(null)),
@@ -55,11 +79,15 @@ jest.mock('@react-navigation/native', () => ({
     navigate: jest.fn(),
     goBack: jest.fn(),
     setOptions: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+    removeListener: jest.fn(),
+    getState: jest.fn(() => ({ routes: [], index: 0 })),
   }),
   useRoute: () => ({
     params: {},
   }),
   useFocusEffect: jest.fn(),
+  useIsFocused: jest.fn(() => true),
 }));
 
 jest.mock('@react-navigation/native-stack', () => ({

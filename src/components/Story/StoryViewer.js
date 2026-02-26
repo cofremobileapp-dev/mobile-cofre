@@ -28,18 +28,29 @@ const StoryViewer = ({
   onClose,
   onStoryChange,
 }) => {
+  // Validate initialIndex - ensure it's within bounds
+  const safeInitialIndex = React.useMemo(() => {
+    if (!stories || stories.length === 0) return 0;
+    if (initialIndex < 0 || initialIndex >= stories.length) {
+      console.warn('⚠️ [StoryViewer] Invalid initialIndex:', initialIndex, '- using 0');
+      return 0;
+    }
+    return initialIndex;
+  }, [initialIndex, stories]);
+
   // FIRST LOG - Check if component is being called
   console.log('🚀 [StoryViewer] Component function called', {
     visible,
     storiesCount: stories?.length,
     initialIndex,
+    safeInitialIndex,
   });
 
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const { user } = useAuth();
   const { markAsViewed, deleteStory, archiveStory, unarchiveStory, getViewers } = useStories();
 
-  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [currentIndex, setCurrentIndex] = useState(safeInitialIndex);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +65,16 @@ const StoryViewer = ({
   const videoRef = useRef(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  const currentStory = stories[currentIndex];
+  // Ensure currentIndex is always valid
+  const safeCurrentIndex = React.useMemo(() => {
+    if (!stories || stories.length === 0) return 0;
+    if (currentIndex < 0 || currentIndex >= stories.length) {
+      return 0;
+    }
+    return currentIndex;
+  }, [currentIndex, stories]);
+
+  const currentStory = stories[safeCurrentIndex];
   const isOwner = user?.id === currentStory?.user_id;
 
   const styles = useMemo(() => createStyles(SCREEN_WIDTH, SCREEN_HEIGHT), [SCREEN_WIDTH, SCREEN_HEIGHT]);
@@ -111,7 +131,8 @@ const StoryViewer = ({
   // Reset when modal opens/closes
   useEffect(() => {
     if (visible) {
-      setCurrentIndex(initialIndex);
+      // Use safeInitialIndex instead of initialIndex to prevent invalid index
+      setCurrentIndex(safeInitialIndex);
       setProgress(0);
       setIsPaused(false);
     } else {
@@ -120,7 +141,7 @@ const StoryViewer = ({
         videoRef.current.stopAsync();
       }
     }
-  }, [visible, initialIndex]);
+  }, [visible, safeInitialIndex]);
 
   const handleNext = () => {
     if (currentIndex < stories.length - 1) {
@@ -378,6 +399,7 @@ const StoryViewer = ({
     hasStories: !!stories,
     storiesLength: stories?.length,
     currentIndex,
+    safeCurrentIndex,
     hasCurrentStory: !!currentStory,
   });
 
@@ -388,15 +410,71 @@ const StoryViewer = ({
 
   if (!stories || stories.length === 0) {
     console.log('⚠️ [StoryViewer] Not rendering - no stories');
-    return null;
+    // Show a modal with message instead of returning null
+    return (
+      <Modal
+        visible={visible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={onClose}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#1F2937', padding: 24, borderRadius: 16, alignItems: 'center', maxWidth: '80%' }}>
+            <Ionicons name="images-outline" size={64} color="#9CA3AF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600', marginTop: 16, textAlign: 'center' }}>
+              Story Tidak Tersedia
+            </Text>
+            <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+              Story ini mungkin sudah kadaluarsa atau dihapus.
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{ marginTop: 20, backgroundColor: '#10B981', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
   }
 
   if (!currentStory) {
-    console.log('⚠️ [StoryViewer] Not rendering - currentStory is null', {
+    console.log('⚠️ [StoryViewer] currentStory is null, trying to recover', {
       currentIndex,
+      safeCurrentIndex,
       storiesLength: stories.length,
     });
-    return null;
+    // Try to use the first story as fallback
+    const fallbackStory = stories[0];
+    if (!fallbackStory) {
+      return (
+        <Modal
+          visible={visible}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={onClose}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#1F2937', padding: 24, borderRadius: 16, alignItems: 'center', maxWidth: '80%' }}>
+              <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+              <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600', marginTop: 16, textAlign: 'center' }}>
+                Terjadi Kesalahan
+              </Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+                Gagal memuat story. Silakan coba lagi.
+              </Text>
+              <TouchableOpacity
+                onPress={onClose}
+                style={{ marginTop: 20, backgroundColor: '#10B981', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>Tutup</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      );
+    }
   }
 
   const progressWidth = progressAnim.interpolate({

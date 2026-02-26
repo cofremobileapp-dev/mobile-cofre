@@ -286,6 +286,10 @@ class ApiWrapper {
     return apiService.checkHealth();
   }
 
+  async logout() {
+    return apiService.logout();
+  }
+
   // Story Additional Methods
   async getArchivedStories() {
     return apiService.getArchivedStories();

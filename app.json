@@ -74,7 +74,9 @@
     "extra": {
       "eas": {
         "projectId": "4856af3a-65be-4d4b-b88e-021eca7f66d1"
-      }
+      },
+      "localApiUrl": "http://192.168.1.7:8000/api",
+      "productionApiUrl": "https://cofremobileapp.my.id/api"
     },
     "plugins": [
       [

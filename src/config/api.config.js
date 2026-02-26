@@ -3,6 +3,8 @@
  * Centralized API settings for easy management
  */
 
+import Constants from 'expo-constants';
+
 // SECURITY: IP addresses should be configured via environment variables in production
 // For development, create a file: mobile/.env.local with your local IP
 // Example .env.local content:
@@ -12,9 +14,10 @@
 // Windows: ipconfig (look for IPv4 Address)
 // Mac/Linux: ifconfig or ip addr show
 
-// Get environment variables (will be undefined if not set)
-const ENV_LOCAL_API_URL = process.env.LOCAL_API_URL;
-const ENV_PRODUCTION_API_URL = process.env.PRODUCTION_API_URL;
+// Get environment variables from expo-constants (works in Expo Go)
+const expoExtra = Constants.expoConfig?.extra || {};
+const ENV_LOCAL_API_URL = expoExtra.localApiUrl;
+const ENV_PRODUCTION_API_URL = expoExtra.productionApiUrl;
 
 const API_CONFIGS = {
   // LOCAL DEVELOPMENT - Multiple options for different scenarios
@@ -37,10 +40,10 @@ const API_CONFIGS = {
   PRODUCTION: ENV_PRODUCTION_API_URL || 'https://cofremobileapp.my.id/api',
 };
 
-// Auto-detect environment based on __DEV__ flag and platform
+// Auto-detect environment based on __DEV__ flag
 // In production builds, this will automatically use PRODUCTION config
 // For development, use LOCAL_PHYSICAL_DEVICE to access backend from any device on the network
-const ACTIVE_CONFIG = 'PRODUCTION'; // Always use production backend (cofremobileapp.my.id)
+const ACTIVE_CONFIG = __DEV__ ? 'LOCAL_PHYSICAL_DEVICE' : 'PRODUCTION';
 
 export const API_CONFIG = {
   BASE_URL: API_CONFIGS[ACTIVE_CONFIG],

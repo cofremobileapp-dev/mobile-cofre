@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 
-const StoryBar = ({ stories = [], onStoryPress, onAddStory }) => {
+const StoryBar = ({ stories = [], onStoryPress, onAddStory, onRefresh }) => {
   const { user } = useAuth();
 
   // Debug: Log user and stories
@@ -22,6 +22,40 @@ const StoryBar = ({ stories = [], onStoryPress, onAddStory }) => {
     storiesCount: stories?.length,
     hasUser: !!user,
   });
+
+  // Helper function to safely get story index and handle edge cases
+  const handleStoryPress = (userId, userName = 'User') => {
+    if (!stories || stories.length === 0) {
+      console.warn('⚠️ [StoryBar] No stories available');
+      Alert.alert(
+        'Story Tidak Tersedia',
+        'Story belum tersedia. Coba refresh halaman.',
+        [
+          { text: 'Refresh', onPress: () => onRefresh?.() },
+          { text: 'OK', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    const storyIndex = stories.findIndex(s => Number(s.user_id) === Number(userId));
+    console.log('📖 [StoryBar] Found story index:', storyIndex, 'for userId:', userId);
+
+    if (storyIndex === -1) {
+      console.warn('⚠️ [StoryBar] Story not found for user:', userId);
+      Alert.alert(
+        'Story Tidak Ditemukan',
+        `Story dari ${userName} tidak ditemukan. Mungkin sudah kadaluarsa.`,
+        [
+          { text: 'Refresh', onPress: () => onRefresh?.() },
+          { text: 'OK', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    onStoryPress?.(storyIndex, Number(userId));
+  };
 
   // Helper function to get time ago
   const getTimeAgo = (dateString) => {
@@ -89,11 +123,8 @@ const StoryBar = ({ stories = [], onStoryPress, onAddStory }) => {
             });
 
             if (userHasStories && onStoryPress) {
-              // Directly open story viewer
-              const storyIndex = stories.findIndex(s => Number(s.user_id) === user?.id);
-              console.log('📖 [StoryBar] Opening story at index:', storyIndex);
-              // Always call onStoryPress - it will handle invalid index and refresh
-              onStoryPress(storyIndex, user.id);
+              // Use safe handler with validation
+              handleStoryPress(user.id, 'Anda');
             } else {
               // Add new story
               console.log('📖 [StoryBar] Opening story camera');
@@ -163,9 +194,8 @@ const StoryBar = ({ stories = [], onStoryPress, onAddStory }) => {
                   userId: userStory.userId,
                   userName: userStory.user?.name,
                 });
-                const storyIndex = stories.findIndex(s => Number(s.user_id) === Number(userStory.userId));
-                console.log('📖 [StoryBar] Opening story at index:', storyIndex);
-                onStoryPress?.(storyIndex, Number(userStory.userId));
+                // Use safe handler with validation
+                handleStoryPress(userStory.userId, userStory.user?.name || 'User');
               }}
             >
               <View style={[

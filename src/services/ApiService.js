@@ -155,10 +155,15 @@ class ApiService {
   }
 
   // Special method for file uploads - uses native fetch for better React Native compatibility
-  async uploadFile(url, formData, onUploadProgress = null) {
+  async uploadFile(url, formData, onUploadProgress = null, retryCount = 0) {
+    const MAX_RETRIES = 2;
+    const UPLOAD_TIMEOUT = API_CONFIG.TIMEOUT.UPLOAD || 180000; // 3 minutes default
+
     console.log('📤 [API] Starting upload to:', url);
     console.log('📤 [API] Full URL:', `${API_BASE_URL}${url}`);
     console.log('📤 [API] Auth token present:', !!this.authToken);
+    console.log('📤 [API] Timeout:', UPLOAD_TIMEOUT, 'ms');
+    console.log('📤 [API] Retry count:', retryCount);
 
     // Log FormData contents for debugging
     if (formData._parts) {
@@ -185,6 +190,13 @@ class ApiService {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
 
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏱️ [API] Upload timeout triggered after', UPLOAD_TIMEOUT, 'ms');
+      controller.abort();
+    }, UPLOAD_TIMEOUT);
+
     try {
       console.log('📤 [API] Sending fetch request...');
 
@@ -193,7 +205,11 @@ class ApiService {
         method: 'POST',
         headers: headers,
         body: formData,
+        signal: controller.signal,
       });
+
+      // Clear timeout on successful response
+      clearTimeout(timeoutId);
 
       console.log('📥 [API] Response status:', response.status);
 
@@ -221,7 +237,36 @@ class ApiService {
       return { data: responseData, status: response.status };
 
     } catch (error) {
+      // Clear timeout on error
+      clearTimeout(timeoutId);
+
       console.error('📥 [API] Upload error:', error.message);
+      console.error('📥 [API] Error name:', error.name);
+
+      // Check if it's an abort/timeout error or network error
+      const isTimeoutError = error.name === 'AbortError';
+      const isNetworkError = error.message === 'Network request failed' ||
+                            error.message?.includes('Network') ||
+                            error.message?.includes('network');
+
+      // Retry logic for timeout and network errors
+      if ((isTimeoutError || isNetworkError) && retryCount < MAX_RETRIES) {
+        const retryDelay = (retryCount + 1) * 2000; // 2s, 4s
+        console.log(`🔄 [API] Retrying upload in ${retryDelay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return this.uploadFile(url, formData, onUploadProgress, retryCount + 1);
+      }
+
+      // Create user-friendly error message
+      if (isTimeoutError) {
+        error.message = 'Upload timeout. Koneksi terlalu lambat atau server tidak merespon. Coba lagi.';
+        error.code = 'UPLOAD_TIMEOUT';
+      } else if (isNetworkError) {
+        error.message = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
+        error.code = 'NETWORK_ERROR';
+      }
+
       if (error.response) {
         console.error('📥 [API] Response status:', error.response.status);
         console.error('📥 [API] Response data:', JSON.stringify(error.response.data, null, 2));
@@ -242,6 +287,20 @@ class ApiService {
         success: false,
         error: error.userMessage || error.message,
         code: error.code
+      };
+    }
+  }
+
+  // Logout - revoke token on server
+  async logout() {
+    try {
+      const response = await this.post('/logout');
+      return { success: true, data: response.data };
+    } catch (error) {
+      // Even if server logout fails, we should clear local auth
+      return {
+        success: false,
+        error: error.userMessage || error.message,
       };
     }
   }

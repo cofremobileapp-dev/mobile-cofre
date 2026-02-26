@@ -237,6 +237,7 @@ const BookmarksScreen = ({ navigation }) => {
         stories={stories || []}
         onStoryPress={handleStoryPress}
         onAddStory={handleAddStory}
+        onRefresh={fetchStories}
       />
     );
   };

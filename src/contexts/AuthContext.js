@@ -219,6 +219,13 @@ export const AuthProvider = ({ children }) => {
       // Remove push notification token from backend
       await removePushNotificationToken();
 
+      // Revoke token on server (best effort - continue even if fails)
+      try {
+        await apiService.logout();
+      } catch (logoutError) {
+        console.warn('Server logout failed:', logoutError.message);
+      }
+
       // Clear stored auth data securely
       await secureStorage.multiRemove([
         STORAGE_KEYS.AUTH_TOKEN,
