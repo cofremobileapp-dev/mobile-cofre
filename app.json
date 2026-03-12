@@ -1,0 +1,101 @@
+{
+  "expo": {
+    "name": "Cofre - Discover Culinary Recipes",
+    "slug": "cofre",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EDE8D0"
+    },
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#EDE8D0",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Covre"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cofre.app",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cofre needs access to your camera to record cooking videos",
+        "NSPhotoLibraryUsageDescription": "Cofre needs access to your photo library to select videos for upload",
+        "NSMicrophoneUsageDescription": "Cofre needs access to your microphone to record audio for videos",
+        "NSUserNotificationsUsageDescription": "Cofre needs permission to send you notifications about likes, comments, and new followers"
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.cofre.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B3D2E"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "cofre.app",
+              "pathPrefix": "/video"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "scheme": "cofre",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4856af3a-65be-4d4b-b88e-021eca7f66d1"
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#EDE8D0",
+          "mode": "production"
+        }
+      ],
+      "expo-audio",
+      "expo-secure-store",
+      "expo-asset",
+      "expo-video"
+    ],
+    "owner": "cofreapps-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4856af3a-65be-4d4b-b88e-021eca7f66d1"
+    }
+  }
+}
