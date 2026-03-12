@@ -41,7 +41,7 @@ const API_CONFIGS = {
 // Auto-detect environment based on __DEV__ flag and platform
 // In production builds, this will automatically use PRODUCTION config
 // For development, use LOCAL_PHYSICAL_DEVICE to access backend from any device on the network
-const ACTIVE_CONFIG = 'LOCAL_PHYSICAL_DEVICE'; // Using local backend while production is down
+const ACTIVE_CONFIG = 'PRODUCTION'; // Jagoan Hosting VPS - cofremobileapp.my.id
 
 export const API_CONFIG = {
   BASE_URL: API_CONFIGS[ACTIVE_CONFIG],
