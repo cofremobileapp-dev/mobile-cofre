@@ -180,6 +180,8 @@ const StoryViewer = ({
     setPollVotes({});
     setQuestionSent({});
     setShowQuestionModal(false);
+    setStickerResponses([]);
+    setViewers([]);
   }, [currentIndex]);
 
   const handleNext = () => {
@@ -551,8 +553,15 @@ const StoryViewer = ({
   const handleShowViewers = async () => {
     if (!isOwner) return;
 
-    setLoadingViewers(true);
+    // Show modal immediately — if we already have cached data, show it right away
     setShowViewersModal(true);
+    setIsPaused(true);
+
+    // Only show loading spinner if we have no cached data yet
+    const hasCachedData = viewers.length > 0 || stickerResponses.length > 0;
+    if (!hasCachedData) {
+      setLoadingViewers(true);
+    }
 
     try {
       const { viewersList, responses } = await fetchViewersAndReplies(currentStory.id);
@@ -560,14 +569,16 @@ const StoryViewer = ({
       setStickerResponses(responses);
     } catch (err) {
       console.error('Error fetching viewers:', err);
-      Alert.alert('Error', 'Failed to load viewers');
-      setShowViewersModal(false);
+      if (!hasCachedData) {
+        Alert.alert('Error', 'Failed to load viewers');
+        setShowViewersModal(false);
+      }
     } finally {
       setLoadingViewers(false);
     }
   };
 
-  // Auto-refresh viewers data every 5 seconds when modal is open
+  // Auto-refresh viewers data every 3 seconds when modal is open
   useEffect(() => {
     let refreshInterval;
 
@@ -580,7 +591,7 @@ const StoryViewer = ({
         } catch (err) {
           console.error('Error refreshing viewers:', err);
         }
-      }, 5000);
+      }, 3000);
     }
 
     return () => {
@@ -950,17 +961,6 @@ const StoryViewer = ({
             </View>
           )}
 
-          {isOwner && (
-            <TouchableOpacity
-              style={styles.viewCountContainer}
-              onPress={handleShowViewers}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="eye" size={16} color="#FFFFFF" />
-              <Text style={styles.viewCountText}>{currentStory.view_count || 0}</Text>
-            </TouchableOpacity>
-          )}
-
           {/* Reply & Reactions - REMOVED per user request */}
         </View>
 
@@ -1248,6 +1248,19 @@ const StoryViewer = ({
             return null;
           }
         })()}
+
+        {/* Eye button - rendered after stickers so it's always on top and tappable */}
+        {isOwner && (
+          <TouchableOpacity
+            style={styles.viewCountContainer}
+            onPress={handleShowViewers}
+            activeOpacity={0.7}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          >
+            <Ionicons name="eye" size={18} color="#FFFFFF" />
+            <Text style={styles.viewCountText}>{currentStory.view_count || 0}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Report Modal */}
         <Modal
@@ -1730,10 +1743,12 @@ const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    zIndex: 1000,
+    elevation: 1000,
   },
   viewCountText: {
     color: '#FFFFFF',
