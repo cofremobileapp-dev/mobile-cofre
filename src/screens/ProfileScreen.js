@@ -109,6 +109,17 @@ const ProfileScreen = () => {
     }, [])
   );
 
+  // Sync follower/following counts when user data updates (e.g. after refreshUser)
+  useEffect(() => {
+    if (user?.followers_count !== undefined || user?.following_count !== undefined) {
+      setUserStats(prev => ({
+        ...prev,
+        followers: user?.followers_count || 0,
+        following: user?.following_count || 0,
+      }));
+    }
+  }, [user?.followers_count, user?.following_count]);
+
   useEffect(() => {
     if (activeTab === 'repost') {
       loadReposts();
