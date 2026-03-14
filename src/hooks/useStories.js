@@ -20,8 +20,8 @@ export const useStories = () => {
     try {
       setLoading(true);
       setError(null);
-      // Fetch all stories (not just followed users) so any user can view any story
-      const response = await apiService.get('/stories?all=1');
+      // Fetch stories from followed users + own stories
+      const response = await apiService.get('/stories');
 
       // Extract stories from response - handle multiple response shapes
       const storiesData = response.data?.stories || response.data?.data?.stories || response.data?.data || [];
