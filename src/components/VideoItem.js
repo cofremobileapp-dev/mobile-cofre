@@ -696,11 +696,6 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
           </View>
         )}
 
-        {/* Continue Watching Button */}
-        <TouchableOpacity style={videoItemComponentStyles.continueButton}>
-          <Text style={videoItemComponentStyles.continueButtonText}>{t('continueWatching')}</Text>
-          <Ionicons name="chevron-up" size={16} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       {/* Recipe Modal */}
@@ -1086,20 +1081,6 @@ const videoItemComponentStyles = StyleSheet.create({
   },
   taggedUserLink: {
     color: '#FFFFFF',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  continueButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-  },
-  continueButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
     fontWeight: '600',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
