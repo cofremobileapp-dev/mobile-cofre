@@ -48,9 +48,10 @@ const StoryBar = ({ stories = [], onStoryPress, onAddStory, transparent = false 
 
       // Get all stories for this user (they should be consecutive in the array)
       const userStoriesList = stories.filter(s => s.user_id === story.user_id);
-      // Own stories are always considered "viewed" (user doesn't need to view their own)
+      // For own stories: always show green ring (active indicator) since user doesn't "view" own stories
+      // For other users: check if all their stories have been viewed
       const isOwnStory = user && Number(story.user_id) === user.id;
-      const hasViewed = isOwnStory ? true : userStoriesList.every(s => s.has_viewed);
+      const hasViewed = isOwnStory ? false : userStoriesList.every(s => s.has_viewed);
 
       userStories.push({
         userId: story.user_id,
