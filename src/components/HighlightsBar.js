@@ -30,6 +30,18 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
   const [createError, setCreateError] = useState(null);
   const optimisticHighlightsRef = useRef([]);
 
+  // Edit highlight state
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showEditStoriesModal, setShowEditStoriesModal] = useState(false);
+  const [showAddStoriesModal, setShowAddStoriesModal] = useState(false);
+  const [editingHighlight, setEditingHighlight] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCurrentStories, setEditCurrentStories] = useState([]);
+  const [editSelectedNewStories, setEditSelectedNewStories] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingEditStories, setIsLoadingEditStories] = useState(false);
+
   useEffect(() => {
     loadHighlights();
   }, [userId]);
@@ -386,6 +398,190 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
     );
   };
 
+  // Long-press: show options (Edit / Delete) instead of directly deleting
+  const handleLongPress = (highlight) => {
+    setEditingHighlight(highlight);
+    setShowOptionsModal(true);
+  };
+
+  // Open edit modal with current highlight data
+  const handleEditHighlight = async () => {
+    setShowOptionsModal(false);
+    const hl = editingHighlight;
+    setEditTitle(hl.title || hl.name || '');
+    setShowEditModal(true);
+
+    // Load current stories in this highlight
+    setIsLoadingEditStories(true);
+    try {
+      const response = await apiService.getHighlightDetails(hl.id);
+      const data = response.data;
+      const stories =
+        data?.highlight?.stories ||
+        data?.data?.stories ||
+        data?.stories ||
+        hl.stories ||
+        [];
+      setEditCurrentStories(stories);
+    } catch (err) {
+      console.log('📌 [HighlightsBar] Failed to load highlight stories for edit:', err?.response?.status);
+      setEditCurrentStories(hl.stories || []);
+    } finally {
+      setIsLoadingEditStories(false);
+    }
+  };
+
+  // Save edited title and/or cover
+  const handleSaveEdit = async () => {
+    if (!editTitle.trim()) {
+      Alert.alert('Error', 'Nama highlight tidak boleh kosong');
+      return;
+    }
+    try {
+      setIsSaving(true);
+      const updateData = { title: editTitle.trim() };
+
+      // If there are current stories, use the first one as cover
+      if (editCurrentStories.length > 0) {
+        const coverUrl = editCurrentStories[0].media_url || editCurrentStories[0].thumbnail_url;
+        if (coverUrl) {
+          updateData.cover_image_url = coverUrl;
+        }
+      }
+
+      await apiService.updateHighlight(editingHighlight.id, updateData);
+
+      // Update local state
+      setHighlights(prev =>
+        prev.map(h =>
+          h.id === editingHighlight.id
+            ? { ...h, title: editTitle.trim(), name: editTitle.trim(), cover_image_url: updateData.cover_image_url || h.cover_image_url }
+            : h
+        )
+      );
+
+      setShowEditModal(false);
+      Alert.alert('Berhasil', 'Highlight berhasil diperbarui!');
+      loadHighlights(false);
+    } catch (error) {
+      console.error('📌 [HighlightsBar] Error updating highlight:', error?.response?.status, error?.response?.data);
+      Alert.alert('Error', error?.response?.data?.message || 'Gagal memperbarui highlight');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Remove a story from the highlight
+  const handleRemoveStoryFromHighlight = async (storyId) => {
+    Alert.alert(
+      'Hapus Story',
+      'Hapus story ini dari highlight?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.removeStoryFromHighlight(editingHighlight.id, storyId);
+              setEditCurrentStories(prev => prev.filter(s => s.id !== storyId));
+              Alert.alert('Berhasil', 'Story dihapus dari highlight');
+            } catch (error) {
+              console.error('📌 [HighlightsBar] Error removing story:', error?.response?.status);
+              Alert.alert('Error', 'Gagal menghapus story dari highlight');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Set a story as cover image
+  const handleSetCover = (story) => {
+    const coverUrl = story.media_url || story.thumbnail_url;
+    if (coverUrl) {
+      // Update local state immediately for feedback
+      setHighlights(prev =>
+        prev.map(h =>
+          h.id === editingHighlight.id
+            ? { ...h, cover_image_url: coverUrl, cover_url: coverUrl }
+            : h
+        )
+      );
+      setEditingHighlight(prev => ({ ...prev, cover_image_url: coverUrl, cover_url: coverUrl }));
+      Alert.alert('Cover Diperbarui', 'Cover highlight akan disimpan saat Anda menekan Simpan');
+    }
+  };
+
+  // Open add stories modal
+  const handleOpenAddStories = () => {
+    setEditSelectedNewStories([]);
+    loadArchivedStories();
+    setShowAddStoriesModal(true);
+  };
+
+  // Toggle selection for adding stories
+  const toggleEditStorySelection = (storyId) => {
+    setEditSelectedNewStories(prev => {
+      if (prev.includes(storyId)) {
+        return prev.filter(id => id !== storyId);
+      } else {
+        return [...prev, storyId];
+      }
+    });
+  };
+
+  // Submit adding new stories to existing highlight
+  const handleAddStoriesToHighlight = async () => {
+    if (editSelectedNewStories.length === 0) {
+      Alert.alert('Error', 'Pilih minimal 1 story');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      let addedCount = 0;
+
+      for (const storyId of editSelectedNewStories) {
+        try {
+          await apiService.addStoryToHighlight(editingHighlight.id, storyId);
+          addedCount++;
+        } catch (err) {
+          console.log('📌 [HighlightsBar] addStoryToHighlight failed for', storyId, ':', err?.response?.status, err?.response?.data?.message);
+        }
+      }
+
+      if (addedCount > 0) {
+        // Reload stories for edit modal
+        try {
+          const response = await apiService.getHighlightDetails(editingHighlight.id);
+          const data = response.data;
+          const stories =
+            data?.highlight?.stories ||
+            data?.data?.stories ||
+            data?.stories ||
+            [];
+          setEditCurrentStories(stories);
+        } catch (err) {
+          console.log('📌 [HighlightsBar] reload after add failed');
+        }
+
+        Alert.alert('Berhasil', `${addedCount} story ditambahkan ke highlight`);
+      } else {
+        Alert.alert('Error', 'Gagal menambahkan story. Mungkin sudah ada di highlight ini.');
+      }
+
+      setShowAddStoriesModal(false);
+      setEditSelectedNewStories([]);
+      loadHighlights(false);
+    } catch (error) {
+      console.error('📌 [HighlightsBar] Error adding stories:', error);
+      Alert.alert('Error', 'Gagal menambahkan story');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -427,7 +623,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
             onPress={() => handleHighlightPress(highlight)}
             onLongPress={() => {
               if (isOwnProfile) {
-                handleDeleteHighlight(highlight.id, highlight.title || highlight.name);
+                handleLongPress(highlight);
               }
             }}
           >
@@ -577,6 +773,248 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
                 <>
                   <Text style={styles.submitButtonText}>Buat Highlight</Text>
                   <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      {/* Options Modal (Edit / Delete) */}
+      <Modal
+        visible={showOptionsModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={[styles.optionsModalContent, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary, textAlign: 'center', marginBottom: 16 }]}>
+              {editingHighlight?.title || editingHighlight?.name}
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.optionButton, { borderBottomColor: colors.border }]}
+              onPress={handleEditHighlight}
+            >
+              <Ionicons name="pencil" size={22} color={colors.primary} />
+              <Text style={[styles.optionText, { color: colors.textPrimary }]}>Edit Highlight</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => {
+                setShowOptionsModal(false);
+                if (editingHighlight) {
+                  handleDeleteHighlight(editingHighlight.id, editingHighlight.title || editingHighlight.name);
+                }
+              }}
+            >
+              <Ionicons name="trash" size={22} color="#EF4444" />
+              <Text style={[styles.optionText, { color: '#EF4444' }]}>Hapus Highlight</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: colors.backgroundTertiary, marginTop: 12 }]}
+              onPress={() => setShowOptionsModal(false)}
+            >
+              <Text style={[styles.submitButtonText, { color: colors.textPrimary }]}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Highlight Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.modalContentLarge, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Edit Highlight</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Title Input */}
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Nama Highlight</Text>
+              <TextInput
+                style={[styles.textInput, { backgroundColor: colors.backgroundTertiary, color: colors.textPrimary }]}
+                value={editTitle}
+                onChangeText={setEditTitle}
+                placeholder="Masukkan nama highlight..."
+                placeholderTextColor={colors.iconInactive}
+                maxLength={30}
+              />
+            </View>
+
+            {/* Current Stories */}
+            <View style={styles.inputContainer}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Stories ({editCurrentStories.length})
+                </Text>
+                <TouchableOpacity onPress={handleOpenAddStories}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="add-circle" size={20} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '500' }}>Tambah</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {isLoadingEditStories ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 12 }} />
+              ) : editCurrentStories.length > 0 ? (
+                <FlatList
+                  data={editCurrentStories}
+                  horizontal
+                  keyExtractor={(item) => item.id.toString()}
+                  style={{ marginTop: 8 }}
+                  showsHorizontalScrollIndicator={false}
+                  renderItem={({ item }) => (
+                    <View style={styles.editStoryItem}>
+                      <Image
+                        source={{ uri: item.media_url || item.thumbnail_url }}
+                        style={styles.editStoryThumb}
+                        resizeMode="cover"
+                      />
+                      {/* Set as cover button */}
+                      <TouchableOpacity
+                        style={styles.setCoverButton}
+                        onPress={() => handleSetCover(item)}
+                      >
+                        <Ionicons name="image" size={14} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      {/* Remove button */}
+                      <TouchableOpacity
+                        style={styles.removeStoryButton}
+                        onPress={() => handleRemoveStoryFromHighlight(item.id)}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                />
+              ) : (
+                <Text style={[{ color: colors.textTertiary, fontSize: 13, marginTop: 8 }]}>
+                  Belum ada story di highlight ini
+                </Text>
+              )}
+            </View>
+
+            {/* Save Button */}
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                { backgroundColor: colors.primary },
+                (!editTitle.trim() || isSaving) && styles.submitButtonDisabled,
+              ]}
+              onPress={handleSaveEdit}
+              disabled={!editTitle.trim() || isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.submitButtonText}>Simpan</Text>
+                  <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Stories to Existing Highlight Modal */}
+      <Modal
+        visible={showAddStoriesModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddStoriesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.modalContentLarge, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowAddStoriesModal(false)}>
+                <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Tambah Stories</Text>
+              <TouchableOpacity onPress={() => setShowAddStoriesModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.selectedCount, { color: colors.textTertiary }]}>
+              {editSelectedNewStories.length} dipilih
+            </Text>
+
+            {isLoadingStories ? (
+              <View style={styles.storiesLoading}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            ) : archivedStories.length > 0 ? (
+              <FlatList
+                data={archivedStories.filter(s => !editCurrentStories.some(cs => cs.id === s.id))}
+                numColumns={3}
+                keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={styles.storiesGrid}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.storyItem,
+                      editSelectedNewStories.includes(item.id) && [styles.storyItemSelected, { borderColor: colors.primary }],
+                    ]}
+                    onPress={() => toggleEditStorySelection(item.id)}
+                  >
+                    <Image
+                      source={{ uri: item.media_url || item.thumbnail_url }}
+                      style={styles.storyThumbnail}
+                      resizeMode="cover"
+                    />
+                    {editSelectedNewStories.includes(item.id) && (
+                      <View style={styles.selectedOverlay}>
+                        <Ionicons name="checkmark-circle" size={32} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyStories}>
+                    <Ionicons name="images-outline" size={48} color={colors.iconInactive} />
+                    <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Semua story sudah ada di highlight ini</Text>
+                  </View>
+                }
+              />
+            ) : (
+              <View style={styles.emptyStories}>
+                <Ionicons name="images-outline" size={64} color={colors.iconInactive} />
+                <Text style={[styles.emptyText, { color: colors.textTertiary }]}>Belum ada story</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                { backgroundColor: colors.primary },
+                (editSelectedNewStories.length === 0 || isSaving) && styles.submitButtonDisabled,
+              ]}
+              onPress={handleAddStoriesToHighlight}
+              disabled={editSelectedNewStories.length === 0 || isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.submitButtonText}>Tambahkan</Text>
+                  <Ionicons name="add" size={20} color="#FFFFFF" />
                 </>
               )}
             </TouchableOpacity>
@@ -760,6 +1198,52 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     marginTop: 4,
+  },
+  optionsModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  editStoryItem: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: 8,
+    position: 'relative',
+  },
+  editStoryThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  removeStoryButton: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 10,
+  },
+  setCoverButton: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 8,
+    padding: 3,
   },
 });
 
