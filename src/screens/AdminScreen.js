@@ -262,7 +262,7 @@ const AdminScreen = ({ navigation }) => {
         {/* Video Info */}
         <View style={styles.videoInfo}>
           <Text style={[styles.videoTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-            {menuData.name || 'Untitled'}
+            {menuData.name || menuData.description || 'Untitled'}
           </Text>
           <View style={styles.creatorInfo}>
             <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />

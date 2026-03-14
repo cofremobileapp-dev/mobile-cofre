@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -49,8 +50,10 @@ const VideoPreviewModal = ({ visible, video, onClose, currentUserId }) => {
     }
   }, [visible, video?.id]);
 
-  // Video player
-  const player = useVideoPlayer(video?.s3_url, (player) => {
+  const isImagePost = menuData?.media_type === 'image';
+
+  // Video player (only for video posts)
+  const player = useVideoPlayer(isImagePost ? undefined : video?.s3_url, (player) => {
     player.loop = true;
     player.muted = false;
     if (visible) {
@@ -173,15 +176,23 @@ const VideoPreviewModal = ({ visible, video, onClose, currentUserId }) => {
           <View style={styles.placeholder} />
         </View>
 
-        {/* Video Player */}
+        {/* Video/Image Player */}
         <View style={styles.videoContainer}>
           {video.s3_url ? (
-            <VideoView
-              player={player}
-              style={styles.video}
-              contentFit="contain"
-              nativeControls={false}
-            />
+            isImagePost ? (
+              <Image
+                source={{ uri: video.s3_url }}
+                style={styles.video}
+                resizeMode="contain"
+              />
+            ) : (
+              <VideoView
+                player={player}
+                style={styles.video}
+                contentFit="contain"
+                nativeControls={false}
+              />
+            )
           ) : (
             <View style={styles.noVideo}>
               <Ionicons name="videocam-off" size={64} color="#6B7280" />
@@ -242,7 +253,7 @@ const VideoPreviewModal = ({ visible, video, onClose, currentUserId }) => {
               <Text style={styles.price}>{formatPrice(menuData.price)}</Text>
             )}
             <Text style={styles.description}>
-              {video.description || menuData.description || 'Tidak ada deskripsi'}
+              {menuData.description || 'Tidak ada deskripsi'}
             </Text>
 
             {/* Tagged Users */}

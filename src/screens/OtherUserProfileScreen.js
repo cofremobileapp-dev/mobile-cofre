@@ -126,7 +126,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
             const menuData = typeof video.menu_data === 'string'
               ? JSON.parse(video.menu_data)
               : video.menu_data;
-            titles[video.id] = menuData.name || 'Untitled';
+            titles[video.id] = menuData.name || menuData.description || 'Untitled';
           } catch (e) {
             titles[video.id] = 'Untitled';
           }
@@ -306,7 +306,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
         const menuData = typeof item.menu_data === 'string'
           ? JSON.parse(item.menu_data)
           : item.menu_data;
-        menuName = menuData.name || null;
+        menuName = menuData.name || menuData.description || null;
         menuPrice = menuData.price || null;
       } catch (e) {
         // If parsing fails, values stay null

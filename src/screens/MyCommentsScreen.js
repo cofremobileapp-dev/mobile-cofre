@@ -139,7 +139,7 @@ const MyCommentsScreen = ({ navigation }) => {
             )}
             <View style={styles.videoMeta}>
               <Text style={[styles.videoTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                {menuData?.name || video.description || 'Video'}
+                {menuData?.name || menuData?.description || 'Video'}
               </Text>
               <Text style={[styles.videoCreator, { color: colors.textTertiary }]} numberOfLines={1}>
                 @{video.user?.name || 'Unknown'}

@@ -80,7 +80,7 @@ const MyVideosScreen = ({ navigation }) => {
       ? (() => { try { return JSON.parse(video.menu_data); } catch { return {}; } })()
       : (video.menu_data || {});
     Alert.alert(
-      menuData.name || 'Video',
+      menuData.name || menuData.description || 'Video',
       `Likes: ${video.likes_count || 0}\nKomentar: ${video.comments_count || 0}\nViews: ${video.views_count || 0}`
     );
   };
@@ -134,7 +134,7 @@ const MyVideosScreen = ({ navigation }) => {
         {/* Video Info */}
         <View style={styles.videoInfo}>
           <Text style={[styles.videoTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-            {menuData.name || 'Untitled'}
+            {menuData.name || menuData.description || 'Untitled'}
           </Text>
           {menuData.price && (
             <Text style={[styles.videoPrice, { color: colors.primary }]} numberOfLines={1}>

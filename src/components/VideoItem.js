@@ -22,7 +22,20 @@ import { formatPrice } from '../utils/formatUtils';
 const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, currentIndex, totalVideos, onVideoError, isScreenFocused }) => {
   const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
 
-  const videoUrl = item.s3_url || '';
+  // Determine media type early (before hooks, so it's available everywhere)
+  const parsedMenuData = useMemo(() => {
+    try {
+      if (item.menu_data) {
+        return typeof item.menu_data === 'string'
+          ? JSON.parse(item.menu_data)
+          : item.menu_data;
+      }
+    } catch { /* ignore */ }
+    return {};
+  }, [item.menu_data]);
+
+  const isImagePost = parsedMenuData?.media_type === 'image';
+  const videoUrl = isImagePost ? '' : (item.s3_url || '');
 
   const player = useVideoPlayer(videoUrl || undefined, (player) => {
     if (!videoUrl) return;
@@ -50,7 +63,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
   // Control playback with proper error handling
   useEffect(() => {
-    if (!player) return;
+    if (!player || isImagePost) return;
 
     const controlPlayback = async () => {
       try {
@@ -282,7 +295,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   const handleShare = async () => {
     try {
       const shareUrl = `https://cofremobileapp.my.id/video/${item.id}`;
-      const menuName = menuData?.name || 'Video kuliner menarik';
+      const menuName = menuData?.name || menuData?.description || 'Video kuliner menarik';
 
       await Share.share({
         message: `${menuName}\n\nLihat video ini di Cofre: ${shareUrl}`,
@@ -412,17 +425,8 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
     }
   };
 
-  // Parse menu_data if it's a string
-  let menuData = {};
-  try {
-    if (item.menu_data) {
-      menuData = typeof item.menu_data === 'string'
-        ? JSON.parse(item.menu_data)
-        : item.menu_data;
-    }
-  } catch (error) {
-    menuData = {};
-  }
+  // Use already-parsed menu data
+  const menuData = parsedMenuData;
 
   // Function to render description with highlighted hashtags
   const renderDescriptionWithHashtags = (text) => {
@@ -449,21 +453,36 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
   return (
     <View style={videoItemStyles.videoContainer}>
-      {/* Video Player */}
-      <VideoView
-        player={player}
-        style={{
-          width: '100%',
-          height: '100%',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          backgroundColor: '#000000',
-        }}
-        contentFit="cover"
-        nativeControls={false}
-        allowsPictureInPicture={false}
-      />
+      {/* Video Player or Image Display */}
+      {isImagePost ? (
+        <Image
+          source={{ uri: item.s3_url }}
+          style={{
+            width: '100%',
+            height: '100%',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            backgroundColor: '#000000',
+          }}
+          resizeMode="cover"
+        />
+      ) : (
+        <VideoView
+          player={player}
+          style={{
+            width: '100%',
+            height: '100%',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            backgroundColor: '#000000',
+          }}
+          contentFit="cover"
+          nativeControls={false}
+          allowsPictureInPicture={false}
+        />
+      )}
 
       {/* Video Counter - only show on active video */}
       {isActive && (
@@ -646,7 +665,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
         {/* Video Description with Hashtags */}
         <View style={videoItemComponentStyles.descriptionContainer}>
-          {renderDescriptionWithHashtags(item.description || menuData.name || 'Video kuliner menarik!')}
+          {renderDescriptionWithHashtags(menuData.description || menuData.name || 'Video kuliner menarik!')}
         </View>
 
         {/* Tagged Users */}

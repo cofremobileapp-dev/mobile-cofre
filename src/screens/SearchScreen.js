@@ -366,7 +366,7 @@ const SearchScreen = () => {
         </View>
         <View style={styles.resultInfo}>
           <Text style={[styles.resultTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-            {menuData.name || 'Video kuliner'}
+            {menuData.name || menuData.description || 'Video kuliner'}
           </Text>
           <View style={styles.resultStats}>
             <View style={styles.resultStat}>

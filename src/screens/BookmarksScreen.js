@@ -311,7 +311,7 @@ const BookmarksScreen = ({ navigation }) => {
         {/* Video Info */}
         <View style={styles.videoInfo}>
           <Text style={[styles.videoTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-            {menuData.name || 'Untitled'}
+            {menuData.name || menuData.description || 'Untitled'}
           </Text>
           {menuData.price && (
             <Text style={[styles.videoPrice, { color: colors.primary }]} numberOfLines={1}>
