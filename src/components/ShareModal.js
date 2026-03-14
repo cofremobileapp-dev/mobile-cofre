@@ -540,6 +540,37 @@ const ShareModal = ({ visible, onClose, video, onRepostSuccess, currentUserId, o
                   <Text style={styles.circleLabel}>Laporkan</Text>
                 </TouchableOpacity>
               )}
+
+              {/* Block User - Other users' videos only */}
+              {!isOwnVideo && video?.user?.id && (
+                <TouchableOpacity style={styles.circleItem} onPress={() => {
+                  onClose();
+                  Alert.alert(
+                    'Blokir Pengguna',
+                    `Apakah Anda yakin ingin memblokir @${video.user?.name || 'pengguna ini'}?`,
+                    [
+                      { text: 'Batal', style: 'cancel' },
+                      {
+                        text: 'Blokir',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await apiService.blockUser(video.user.id);
+                            Alert.alert('Berhasil', 'Pengguna telah diblokir');
+                          } catch (error) {
+                            Alert.alert('Error', error.response?.data?.message || 'Gagal memblokir pengguna');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}>
+                  <View style={[styles.circleIcon, { backgroundColor: '#EF4444' }]}>
+                    <Ionicons name="ban-outline" size={24} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.circleLabel}>Blokir</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
         </View>

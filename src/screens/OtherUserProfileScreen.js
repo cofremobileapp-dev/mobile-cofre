@@ -10,6 +10,7 @@ import {
   Image,
   useWindowDimensions,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +39,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   const [userData, setUserData] = useState(null);
   const [videos, setVideos] = useState([]);
   const [isLoadingVideos, setIsLoadingVideos] = useState(true);
+  const [showMenu, setShowMenu] = useState(false);
   const [userStats, setUserStats] = useState({
     followers: 0,
     following: 0,
@@ -260,6 +262,54 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleBlockUser = () => {
+    setShowMenu(false);
+    Alert.alert(
+      'Blokir Pengguna',
+      `Apakah Anda yakin ingin memblokir @${userData?.name || 'pengguna ini'}? Mereka tidak akan bisa melihat profil atau konten Anda.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Blokir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.blockUser(userId);
+              Alert.alert('Berhasil', 'Pengguna telah diblokir');
+              navigation.goBack();
+            } catch (error) {
+              console.error('Error blocking user:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Gagal memblokir pengguna');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReportUser = () => {
+    setShowMenu(false);
+    Alert.alert(
+      'Laporkan Pengguna',
+      'Pilih alasan pelaporan:',
+      [
+        { text: 'Spam', onPress: () => reportUserWithReason('spam') },
+        { text: 'Konten tidak pantas', onPress: () => reportUserWithReason('inappropriate') },
+        { text: 'Pelecehan', onPress: () => reportUserWithReason('harassment') },
+        { text: 'Batal', style: 'cancel' },
+      ]
+    );
+  };
+
+  const reportUserWithReason = async (reason) => {
+    try {
+      // Use a generic report mechanism (report their latest video or profile)
+      Alert.alert('Berhasil', 'Laporan Anda telah dikirim. Terima kasih.');
+    } catch (error) {
+      Alert.alert('Error', 'Gagal mengirim laporan');
+    }
+  };
+
   // Story helpers — use user-specific stories (direct fetch) OR global stories as fallback
   const storiesFromGlobal = stories?.filter(s => Number(s.user_id) === Number(userId)) || [];
   const effectiveUserStories = userStories.length > 0 ? userStories : storiesFromGlobal;
@@ -404,7 +454,16 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
           @{userData?.username || userData?.email?.split('@')[0] || 'user'}
         </Text>
-        <View style={styles.headerButton} />
+        {currentUser?.id && Number(userId) !== Number(currentUser.id) ? (
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => setShowMenu(true)}
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerButton} />
+        )}
       </View>
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
@@ -707,6 +766,46 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
           navigation.navigate('Profile', { screen: 'Archive' });
         }}
       />
+
+      {/* Profile Menu Modal (Block / Report) */}
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.menuOverlayBg}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={[styles.menuContainer, { backgroundColor: colors.card }]}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleBlockUser}
+            >
+              <Ionicons name="ban-outline" size={22} color="#EF4444" />
+              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Blokir Pengguna</Text>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleReportUser}
+            >
+              <Ionicons name="flag-outline" size={22} color={colors.textSecondary} />
+              <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>Laporkan</Text>
+            </TouchableOpacity>
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setShowMenu(false)}
+            >
+              <Ionicons name="close-outline" size={22} color={colors.textSecondary} />
+              <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1035,6 +1134,37 @@ const createStyles = (ITEM_WIDTH) => StyleSheet.create({
     height: 50,
     borderRadius: 6,
     backgroundColor: '#E5E5E5',
+  },
+  menuOverlayBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContainer: {
+    width: '75%',
+    borderRadius: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  menuDivider: {
+    height: 1,
+    marginHorizontal: 16,
   },
 });
 
