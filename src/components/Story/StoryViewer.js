@@ -39,6 +39,14 @@ const StoryViewer = ({
   const { user } = useAuth();
   const { markAsViewed, deleteStory, archiveStory, unarchiveStory, getViewers } = useStories();
 
+  // Guard against state updates after unmount
+  const isMountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   // Clamp initialIndex to valid range to prevent null currentStory
   const safeInitialIndex = Math.max(0, Math.min(initialIndex, (stories?.length || 1) - 1));
   const [currentIndex, setCurrentIndex] = useState(safeInitialIndex);
@@ -163,16 +171,20 @@ const StoryViewer = ({
 
   // For creators: auto-fetch sticker responses when viewing own story with stickers
   useEffect(() => {
+    let cancelled = false;
     if (visible && currentStory && isOwner && currentStory.stickers) {
       // Fetch interaction data in background so creator sees results on stickers
       fetchViewersAndReplies(currentStory.id)
         .then(({ viewersList, responses }) => {
-          setViewers(viewersList);
-          setStickerResponses(responses);
-          console.log('📊 [StoryViewer] Auto-loaded responses for owner:', responses.length);
+          if (!cancelled && isMountedRef.current) {
+            setViewers(viewersList);
+            setStickerResponses(responses);
+            console.log('📊 [StoryViewer] Auto-loaded responses for owner:', responses.length);
+          }
         })
         .catch(() => {});
     }
+    return () => { cancelled = true; };
   }, [currentIndex, visible, isOwner]);
 
   // Reset interactive sticker states when story changes
@@ -565,41 +577,54 @@ const StoryViewer = ({
 
     try {
       const { viewersList, responses } = await fetchViewersAndReplies(currentStory.id);
-      setViewers(viewersList);
-      setStickerResponses(responses);
+      if (isMountedRef.current) {
+        setViewers(viewersList);
+        setStickerResponses(responses);
+      }
     } catch (err) {
       console.error('Error fetching viewers:', err);
-      if (!hasCachedData) {
+      if (!hasCachedData && isMountedRef.current) {
         Alert.alert('Error', 'Failed to load viewers');
         setShowViewersModal(false);
       }
     } finally {
-      setLoadingViewers(false);
+      if (isMountedRef.current) {
+        setLoadingViewers(false);
+      }
     }
   };
 
   // Auto-refresh viewers data every 3 seconds when modal is open
   useEffect(() => {
     let refreshInterval;
+    let cancelled = false;
 
     if (showViewersModal && isOwner && currentStory) {
       refreshInterval = setInterval(async () => {
+        // Skip if a previous refresh is still in-flight (prevent overlap)
+        if (refreshInFlightRef.current || cancelled) return;
+        refreshInFlightRef.current = true;
         try {
           const { viewersList, responses } = await fetchViewersAndReplies(currentStory.id);
-          setViewers(viewersList);
-          setStickerResponses(responses);
+          if (!cancelled && isMountedRef.current) {
+            setViewers(viewersList);
+            setStickerResponses(responses);
+          }
         } catch (err) {
           console.error('Error refreshing viewers:', err);
+        } finally {
+          refreshInFlightRef.current = false;
         }
       }, 3000);
     }
 
     return () => {
+      cancelled = true;
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
     };
-  }, [showViewersModal, isOwner, currentStory, getViewers]);
+  }, [showViewersModal, isOwner, currentStory]);
 
   const submitReport = async () => {
     if (!reportReason) {

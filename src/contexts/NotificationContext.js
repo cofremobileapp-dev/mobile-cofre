@@ -14,10 +14,16 @@ export const NotificationProvider = ({ children }) => {
 
   const pollingIntervalRef = useRef(null);
   const appState = useRef(AppState.currentState);
+  const isAuthenticatedRef = useRef(isAuthenticated);
+
+  // Keep ref in sync so polling closure always reads latest value
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async (silent = false) => {
-    if (!isAuthenticated) {
+    if (!isAuthenticatedRef.current) {
       setNotifications([]);
       setUnreadCount(0);
       return;
@@ -45,7 +51,7 @@ export const NotificationProvider = ({ children }) => {
         setIsLoading(false);
       }
     }
-  }, [isAuthenticated]);
+  }, []);
 
   // Mark notification as read
   const markAsRead = useCallback(async (notificationId) => {
@@ -87,7 +93,7 @@ export const NotificationProvider = ({ children }) => {
   }, [fetchNotifications]);
 
   // Setup polling
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     // Clear any existing interval
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -98,19 +104,19 @@ export const NotificationProvider = ({ children }) => {
 
     // Poll every 30 seconds
     pollingIntervalRef.current = setInterval(() => {
-      // Only poll if app is in foreground and user is authenticated
-      if (appState.current === 'active' && isAuthenticated) {
+      // Only poll if app is in foreground and user is authenticated (use ref for fresh value)
+      if (appState.current === 'active' && isAuthenticatedRef.current) {
         fetchNotifications(true); // Silent fetch
       }
     }, 30000); // 30 seconds
-  };
+  }, [fetchNotifications]);
 
-  const stopPolling = () => {
+  const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
-  };
+  }, []);
 
   // Start/stop polling based on auth state
   useEffect(() => {
@@ -123,7 +129,7 @@ export const NotificationProvider = ({ children }) => {
     }
 
     return () => stopPolling();
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, startPolling, stopPolling]);
 
   // Handle app state changes (foreground/background)
   useEffect(() => {

@@ -93,6 +93,16 @@ class NotificationService {
     // Store refreshUser callback for later use
     this.refreshUser = refreshUser;
 
+    // Clean up any existing listeners to prevent accumulation/memory leaks
+    if (this.notificationListener) {
+      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener = null;
+    }
+    if (this.responseListener) {
+      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener = null;
+    }
+
     // Listener for notifications received while app is in foreground
     this.notificationListener = Notifications.addNotificationReceivedListener(
       (notification) => {
