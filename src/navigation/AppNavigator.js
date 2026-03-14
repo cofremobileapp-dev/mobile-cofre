@@ -144,7 +144,7 @@ const ProfileStackNavigator = () => {
         name="MyVideos"
         component={MyVideosScreen}
         options={{
-          headerTitle: 'Video Saya',
+          headerTitle: t('myVideos'),
           headerStyle: { backgroundColor: colors.header },
           headerTintColor: colors.headerText,
         }}

@@ -63,22 +63,22 @@ const UploadScreen = () => {
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
 
   const budgetOptions = [
-    { label: 'Pilih budget', value: '' },
-    { label: '< Rp 25.000', value: '<25000' },
-    { label: 'Rp 25.000 - Rp 50.000', value: '25000-50000' },
-    { label: 'Rp 50.000 - Rp 100.000', value: '50000-100000' },
-    { label: 'Rp 100.000 - Rp 200.000', value: '100000-200000' },
-    { label: '> Rp 200.000', value: '>200000' },
+    { label: t('selectBudgetOption'), value: '' },
+    { label: t('budgetUnder25k'), value: '<25000' },
+    { label: t('budget25kTo50k'), value: '25000-50000' },
+    { label: t('budget50kTo100k'), value: '50000-100000' },
+    { label: t('budget100kTo200k'), value: '100000-200000' },
+    { label: t('budgetOver200k'), value: '>200000' },
   ];
 
   const timeOptions = [
-    { label: 'Pilih waktu', value: '' },
-    { label: 'Sarapan (06:00 - 10:00)', value: 'breakfast' },
-    { label: 'Brunch (10:00 - 12:00)', value: 'brunch' },
-    { label: 'Makan Siang (12:00 - 15:00)', value: 'lunch' },
-    { label: 'Snack Sore (15:00 - 18:00)', value: 'snack' },
-    { label: 'Makan Malam (18:00 - 22:00)', value: 'dinner' },
-    { label: 'Malam (22:00 - 00:00)', value: 'night' },
+    { label: t('selectTimeOption'), value: '' },
+    { label: t('breakfast'), value: 'breakfast' },
+    { label: t('brunch'), value: 'brunch' },
+    { label: t('lunch'), value: 'lunch' },
+    { label: t('snack'), value: 'snack' },
+    { label: t('dinner'), value: 'dinner' },
+    { label: t('night'), value: 'night' },
   ];
 
   // Load playlists when component mounts

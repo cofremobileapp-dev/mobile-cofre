@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { apiService } from '../services/ApiService';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 import { formatPrice } from '../utils/formatUtils';
@@ -35,6 +36,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   const { userId } = route.params;
   const { user: currentUser } = useAuth();
   const { colors, isDark } = useTheme();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('post');
   const [userData, setUserData] = useState(null);
   const [videos, setVideos] = useState([]);
@@ -151,7 +153,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
     } catch (error) {
       if (latestUserIdRef.current !== targetUserId) return;
       console.error('Error loading user profile:', error);
-      Alert.alert('Error', 'Gagal memuat profil pengguna');
+      Alert.alert(t('error'), t('error'));
     } finally {
       if (latestUserIdRef.current === targetUserId) {
         setIsLoadingVideos(false);
@@ -193,13 +195,13 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
 
       if (!currentUser?.id) {
         console.error('Follow error: Missing currentUser');
-        Alert.alert('Error', 'Silakan login terlebih dahulu');
+        Alert.alert(t('error'), t('pleaseLoginAgain'));
         return;
       }
 
       // Prevent following yourself
       if (Number(userId) === Number(currentUser.id)) {
-        Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
+        Alert.alert(t('warning'), t('cannotFollowSelf'));
         return;
       }
 
@@ -247,15 +249,11 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
 
       // Handle rate limiting specifically
       if (error?.response?.status === 429 || error?.isRateLimited) {
-        const retryAfter = error?.retryAfter || 30;
-        Alert.alert(
-          'Terlalu Banyak Permintaan',
-          `Anda melakukan terlalu banyak permintaan. Silakan tunggu ${retryAfter} detik sebelum mencoba lagi.`
-        );
+        Alert.alert(t('warning'), t('tooManyReports'));
       } else if (errorMessage.toLowerCase().includes('cannot follow yourself')) {
-        Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
+        Alert.alert(t('warning'), t('cannotFollowSelf'));
       } else {
-        Alert.alert('Error', 'Gagal mengikuti pengguna. Silakan coba lagi.');
+        Alert.alert(t('error'), t('followFailed'));
       }
     } finally {
       setIsFollowLoading(false);
@@ -265,21 +263,21 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   const handleBlockUser = () => {
     setShowMenu(false);
     Alert.alert(
-      'Blokir Pengguna',
-      `Apakah Anda yakin ingin memblokir @${userData?.name || 'pengguna ini'}? Mereka tidak akan bisa melihat profil atau konten Anda.`,
+      t('block'),
+      `${t('confirm')}? @${userData?.name || ''}`,
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Blokir',
+          text: t('block'),
           style: 'destructive',
           onPress: async () => {
             try {
               await apiService.blockUser(userId);
-              Alert.alert('Berhasil', 'Pengguna telah diblokir');
+              Alert.alert(t('success'), t('userBlocked'));
               navigation.goBack();
             } catch (error) {
               console.error('Error blocking user:', error);
-              Alert.alert('Error', error.response?.data?.message || 'Gagal memblokir pengguna');
+              Alert.alert(t('error'), error.response?.data?.message || t('error'));
             }
           },
         },
@@ -290,23 +288,21 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
   const handleReportUser = () => {
     setShowMenu(false);
     Alert.alert(
-      'Laporkan Pengguna',
-      'Pilih alasan pelaporan:',
+      t('report'),
+      t('reportVideoConfirm'),
       [
         { text: 'Spam', onPress: () => reportUserWithReason('spam') },
-        { text: 'Konten tidak pantas', onPress: () => reportUserWithReason('inappropriate') },
-        { text: 'Pelecehan', onPress: () => reportUserWithReason('harassment') },
-        { text: 'Batal', style: 'cancel' },
+        { text: t('report'), onPress: () => reportUserWithReason('inappropriate') },
+        { text: t('cancel'), style: 'cancel' },
       ]
     );
   };
 
   const reportUserWithReason = async (reason) => {
     try {
-      // Use a generic report mechanism (report their latest video or profile)
-      Alert.alert('Berhasil', 'Laporan Anda telah dikirim. Terima kasih.');
+      Alert.alert(t('success'), t('reportSent'));
     } catch (error) {
-      Alert.alert('Error', 'Gagal mengirim laporan');
+      Alert.alert(t('error'), t('reportFailed'));
     }
   };
 
@@ -524,7 +520,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
                   })}
                 >
                   <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatCount(userStats.followers)}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Followers</Text>
+                  <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t('followers')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.statItem}
@@ -535,7 +531,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
                   })}
                 >
                   <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatCount(userStats.following)}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Following</Text>
+                  <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t('following')}</Text>
                 </TouchableOpacity>
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatCount(userStats.videos)}</Text>
@@ -606,7 +602,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
                   { color: colors.textSecondary },
                   isFollowing && styles.followButtonTextActive
                 ]}>
-                  {isFollowing ? 'Mengikuti' : 'Ikuti'}
+                  {isFollowing ? t('following') : t('follow')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -785,7 +781,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
               onPress={handleBlockUser}
             >
               <Ionicons name="ban-outline" size={22} color="#EF4444" />
-              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Blokir Pengguna</Text>
+              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>{t('block')}</Text>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
@@ -793,7 +789,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
               onPress={handleReportUser}
             >
               <Ionicons name="flag-outline" size={22} color={colors.textSecondary} />
-              <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>Laporkan</Text>
+              <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>{t('report')}</Text>
             </TouchableOpacity>
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity
@@ -801,7 +797,7 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
               onPress={() => setShowMenu(false)}
             >
               <Ionicons name="close-outline" size={22} color={colors.textSecondary} />
-              <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>Batal</Text>
+              <Text style={[styles.menuItemText, { color: colors.textSecondary }]}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

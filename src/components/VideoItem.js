@@ -15,12 +15,14 @@ import {
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/ApiService';
+import { useLanguage } from '../contexts/LanguageContext';
 import CommentModal from './CommentModal';
 import ShareModal from './ShareModal';
 import { formatPrice } from '../utils/formatUtils';
 
 const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, currentIndex, totalVideos, onVideoError, isScreenFocused }) => {
   const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
+  const { t } = useLanguage();
 
   // Determine media type early (before hooks, so it's available everywhere)
   const parsedMenuData = useMemo(() => {
@@ -189,7 +191,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
       // Revert on error
       setIsLiked(previousState);
       setLikesCount(previousCount);
-      Alert.alert('Error', 'Gagal menyukai video. Silakan coba lagi.');
+      Alert.alert(t('error'), t('likeFailed'));
     } finally {
       setIsLiking(false);
     }
@@ -223,8 +225,8 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
     } catch (error) {
       // Revert on error
       setIsReposted(previousState);
-      const errorMessage = error.response?.data?.message || 'Gagal memposting ulang video';
-      Alert.alert('Error', errorMessage);
+      const errorMessage = error.response?.data?.message || t('repostFailed');
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setIsRepostLoading(false);
     }
@@ -250,7 +252,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
     } catch (error) {
       // Revert on error
       setIsBookmarked(previousState);
-      Alert.alert('Error', 'Gagal menyimpan bookmark');
+      Alert.alert(t('error'), t('bookmarkFailed'));
     } finally {
       setIsBookmarking(false);
     }
@@ -259,30 +261,27 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   const handleReport = async () => {
     // Don't allow reporting own videos
     if (Number(item.user?.id) === Number(currentUserId)) {
-      Alert.alert('Perhatian', 'Anda tidak bisa melaporkan video sendiri');
+      Alert.alert(t('warning'), t('cannotReportOwn'));
       return;
     }
 
     Alert.alert(
-      'Laporkan Video',
-      'Apakah Anda yakin ingin melaporkan video ini?',
+      t('reportVideo'),
+      t('reportVideoConfirm'),
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Laporkan',
+          text: t('report'),
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiService.reportVideo(item.id, 'Konten tidak pantas');
-              Alert.alert('Terima kasih', 'Laporan Anda telah dikirim dan akan ditinjau oleh tim kami.');
+              await apiService.reportVideo(item.id, 'Inappropriate content');
+              Alert.alert(t('thankYou'), t('reportSent'));
             } catch (error) {
               if (error.response?.status === 429 || error?.isRateLimited) {
-                Alert.alert(
-                  'Terlalu Banyak Laporan',
-                  'Anda telah mengirim terlalu banyak laporan. Silakan tunggu 1 menit sebelum mencoba lagi.'
-                );
+                Alert.alert(t('warning'), t('tooManyReports'));
               } else {
-                Alert.alert('Error', 'Gagal mengirim laporan. Silakan coba lagi.');
+                Alert.alert(t('error'), t('reportFailed'));
               }
             }
           }
@@ -295,16 +294,16 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   const handleShare = async () => {
     try {
       const shareUrl = `https://cofremobileapp.my.id/video/${item.id}`;
-      const menuName = menuData?.name || menuData?.description || 'Video kuliner menarik';
+      const menuName = menuData?.name || menuData?.description || t('video');
 
       await Share.share({
-        message: `${menuName}\n\nLihat video ini di Cofre: ${shareUrl}`,
+        message: `${menuName}\n\n${shareUrl}`,
         url: shareUrl,
         title: menuName,
       });
     } catch (error) {
       if (error.message !== 'User did not share') {
-        Alert.alert('Error', 'Gagal membagikan video');
+        Alert.alert(t('error'), t('shareFailed'));
       }
     }
   };
@@ -312,7 +311,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   // Handle edit video (only for own videos)
   const handleEdit = () => {
     if (Number(item.user?.id) !== Number(currentUserId)) {
-      Alert.alert('Perhatian', 'Anda hanya bisa mengedit video sendiri');
+      Alert.alert(t('warning'), t('canOnlyEditOwn'));
       return;
     }
 
@@ -322,27 +321,26 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   // Handle delete video (only for own videos)
   const handleDeleteVideo = () => {
     if (Number(item.user?.id) !== Number(currentUserId)) {
-      Alert.alert('Perhatian', 'Anda hanya bisa menghapus video sendiri');
+      Alert.alert(t('warning'), t('canOnlyDeleteOwn'));
       return;
     }
 
     Alert.alert(
-      'Hapus Video',
-      'Apakah Anda yakin ingin menghapus video ini? Tindakan ini tidak dapat dibatalkan.',
+      t('deleteVideo'),
+      t('deleteVideoConfirm'),
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Hapus',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await apiService.deleteVideo(item.id);
-              Alert.alert('Sukses', 'Video berhasil dihapus');
-              // Optionally refresh the feed or navigate away
+              Alert.alert(t('success'), t('videoDeleted'));
             } catch (error) {
               console.error('Error deleting video:', error);
-              const errorMessage = error.response?.data?.message || 'Gagal menghapus video';
-              Alert.alert('Error', errorMessage);
+              const errorMessage = error.response?.data?.message || t('error');
+              Alert.alert(t('error'), errorMessage);
             }
           },
         },
@@ -353,18 +351,18 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   // Handle not interested
   const handleNotInterested = async () => {
     Alert.alert(
-      'Tidak Tertarik',
-      'Video ini akan disembunyikan dari feed Anda',
+      t('notInterestedTitle'),
+      t('notInterestedMsg'),
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Sembunyikan',
+          text: t('hide'),
           onPress: async () => {
             try {
               await apiService.notInterested(item.id);
-              Alert.alert('Berhasil', 'Video tidak akan ditampilkan lagi');
+              Alert.alert(t('success'), t('hidden'));
             } catch (error) {
-              Alert.alert('Error', 'Gagal menyembunyikan video');
+              Alert.alert(t('error'), t('error'));
             }
           }
         }
@@ -387,7 +385,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
       // Prevent following yourself
       if (Number(targetUserId) === Number(currentUserId)) {
-        Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
+        Alert.alert(t('warning'), t('cannotFollowSelf'));
         return;
       }
 
@@ -416,9 +414,9 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
       // Handle specific error messages
       const errorMessage = error.response?.data?.message || error.message || '';
       if (errorMessage.toLowerCase().includes('cannot follow yourself')) {
-        Alert.alert('Perhatian', 'Anda tidak bisa mengikuti diri sendiri');
+        Alert.alert(t('warning'), t('cannotFollowSelf'));
       } else {
-        Alert.alert('Error', 'Gagal mengikuti pengguna. Silakan coba lagi.');
+        Alert.alert(t('error'), t('followFailed'));
       }
     } finally {
       setIsFollowLoading(false);
@@ -507,7 +505,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
             ]}
           >
             <Ionicons name="play-circle" size={80} color="rgba(255,255,255,0.9)" />
-            <Text style={videoItemStyles.pauseText}>Tap to Play</Text>
+            <Text style={videoItemStyles.pauseText}>{t('tapToPlay')}</Text>
           </Animated.View>
         )}
       </TouchableOpacity>
@@ -625,7 +623,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
             color={isReposted ? "#3B82F6" : "#FFFFFF"}
           />
           {isReposted && (
-            <Text style={videoItemStyles.repostedLabel}>Diposting ulang</Text>
+            <Text style={videoItemStyles.repostedLabel}>{t('reposted')}</Text>
           )}
         </TouchableOpacity>
 
@@ -665,7 +663,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
         {/* Video Description with Hashtags */}
         <View style={videoItemComponentStyles.descriptionContainer}>
-          {renderDescriptionWithHashtags(menuData.description || menuData.name || 'Video kuliner menarik!')}
+          {renderDescriptionWithHashtags(menuData.description || menuData.name || t('video'))}
         </View>
 
         {/* Tagged Users */}
@@ -673,7 +671,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
           <View style={videoItemComponentStyles.taggedUsersContainer}>
             <Text style={videoItemComponentStyles.taggedUsersText}>
               <Ionicons name="people-outline" size={13} color="#E5E7EB" />{' '}
-              dengan{' '}
+              {t('taggedWith')}{' '}
               {videoTags.map((tag, index) => (
                 <Text key={tag.id || index}>
                   <Text
@@ -700,7 +698,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
 
         {/* Continue Watching Button */}
         <TouchableOpacity style={videoItemComponentStyles.continueButton}>
-          <Text style={videoItemComponentStyles.continueButtonText}>Continue watching</Text>
+          <Text style={videoItemComponentStyles.continueButtonText}>{t('continueWatching')}</Text>
           <Ionicons name="chevron-up" size={16} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -717,7 +715,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
             {/* Modal Header */}
             <View style={videoItemComponentStyles.recipeModalHeader}>
               <View style={videoItemComponentStyles.recipeModalHeaderContent}>
-                <Text style={videoItemComponentStyles.recipeModalTitle}>{menuData.name || 'Detail Resep'}</Text>
+                <Text style={videoItemComponentStyles.recipeModalTitle}>{menuData.name || t('recipeDetails2')}</Text>
                 {/* Creator Info with Badge */}
                 <View style={videoItemComponentStyles.recipeCreatorInfoHeader}>
                   <Text style={videoItemComponentStyles.recipeCreatorNameHeader}>@{item.user?.name || 'Unknown'}</Text>
@@ -736,12 +734,12 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
             <ScrollView style={videoItemComponentStyles.recipeModalContent}>
               {/* Price Range */}
               {menuData.price && (
-                <Text style={videoItemComponentStyles.recipePriceRange}>Kisaran Harga: {menuData.price}</Text>
+                <Text style={videoItemComponentStyles.recipePriceRange}>{t('price')}: {menuData.price}</Text>
               )}
 
               {/* Ingredients Section with Compact List */}
               <View style={videoItemComponentStyles.recipeSection}>
-                <Text style={videoItemComponentStyles.recipeSectionTitle}>Alat dan Bahan</Text>
+                <Text style={videoItemComponentStyles.recipeSectionTitle}>{t('ingredientsList')}</Text>
                 <View style={videoItemComponentStyles.recipeListContainer}>
                   {menuData.ingredients ? (
                     // Handle both array and string formats
@@ -754,7 +752,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
                         </View>
                       ))
                   ) : (
-                    <Text style={videoItemComponentStyles.recipeListText}>Informasi bahan belum tersedia</Text>
+                    <Text style={videoItemComponentStyles.recipeListText}>{t('ingredientsNotAvailable')}</Text>
                   )}
                 </View>
               </View>
@@ -762,7 +760,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
               {/* Steps Section */}
               {menuData.steps && (
                 <View style={videoItemComponentStyles.recipeSection}>
-                  <Text style={videoItemComponentStyles.recipeSectionTitle}>Cara Pembuatan</Text>
+                  <Text style={videoItemComponentStyles.recipeSectionTitle}>{t('cookingMethod')}</Text>
                   <View style={videoItemComponentStyles.recipeListContainer}>
                     {/* Handle both array and string formats */}
                     {(Array.isArray(menuData.steps) ? menuData.steps : menuData.steps.split('\n'))
@@ -785,14 +783,14 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
               {menuData.servings && (
                 <View style={videoItemComponentStyles.recipeServingsInfo}>
                   <Ionicons name="people-outline" size={16} color="#666666" />
-                  <Text style={videoItemComponentStyles.recipeServingsText}>Untuk {menuData.servings}</Text>
+                  <Text style={videoItemComponentStyles.recipeServingsText}>{t('servings')}: {menuData.servings}</Text>
                 </View>
               )}
 
               {/* Tagged Friends */}
               {videoTags && videoTags.length > 0 && (
                 <View style={videoItemComponentStyles.recipeTaggedSection}>
-                  <Text style={videoItemComponentStyles.recipeSectionTitle}>Ditandai bersama</Text>
+                  <Text style={videoItemComponentStyles.recipeSectionTitle}>{t('taggedWith')}</Text>
                   <View style={videoItemComponentStyles.recipeTaggedList}>
                     {videoTags.map((tag, index) => {
                       const taggedUser = tag.tagged_user || tag.user || tag;

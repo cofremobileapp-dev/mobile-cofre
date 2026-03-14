@@ -183,12 +183,12 @@ const ProfileScreen = () => {
 
   const handleLogout = () => {
     Alert.alert(
-      'Logout',
-      'Apakah Anda yakin ingin keluar?',
+      t('logout'),
+      t('logoutConfirm'),
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Logout',
+          text: t('logout'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -196,7 +196,7 @@ const ProfileScreen = () => {
               console.log('✅ Logout successful');
             } catch (error) {
               console.error('❌ Logout error:', error);
-              Alert.alert('Error', 'Gagal logout. Silakan coba lagi.');
+              Alert.alert(t('error'), t('logoutFailed'));
             }
           }
         }
@@ -208,7 +208,7 @@ const ProfileScreen = () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (permissionResult.granted === false) {
-      Alert.alert('Permission Required', 'You need to allow access to your photos.');
+      Alert.alert(t('permissionRequired'), t('permissionMedia'));
       return;
     }
 
@@ -248,11 +248,11 @@ const ProfileScreen = () => {
         } catch (avatarError) {
           console.error('❌ Error uploading avatar:', avatarError);
           Alert.alert(
-            'Upload Error',
-            'Gagal upload photo profile. Pastikan:\n- File adalah gambar (JPG/PNG)\n- Ukuran max 5MB\n- Koneksi internet stabil',
+            t('error'),
+            t('avatarUploadFailed'),
             [
-              { text: 'Coba Lagi', style: 'cancel', onPress: () => setIsUpdating(false) },
-              { text: 'Skip Photo', onPress: async () => {
+              { text: t('retry'), style: 'cancel', onPress: () => setIsUpdating(false) },
+              { text: t('skip'), onPress: async () => {
                 // Continue without photo
                 await updateProfileData();
               }}
@@ -267,8 +267,8 @@ const ProfileScreen = () => {
 
     } catch (error) {
       console.error('❌ Error updating profile:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Gagal memperbarui profile';
-      Alert.alert('Error', errorMessage);
+      const errorMessage = error.response?.data?.message || error.message || t('error');
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setIsUpdating(false);
     }
@@ -290,7 +290,7 @@ const ProfileScreen = () => {
     const refreshResult = await refreshUser();
 
     if (refreshResult.success) {
-      Alert.alert('Success', 'Profile berhasil diperbarui!');
+      Alert.alert(t('success'), t('profileUpdated'));
       setShowEditModal(false);
       setAvatarUri(null);
 
@@ -325,7 +325,7 @@ const ProfileScreen = () => {
       setPlaylists(playlistsData);
     } catch (error) {
       console.error('❌ [ProfileScreen] Error loading playlists:', error);
-      Alert.alert('Error', 'Gagal memuat playlist');
+      Alert.alert(t('error'), t('playlistLoadFailed'));
     }
   };
 
@@ -339,7 +339,7 @@ const ProfileScreen = () => {
 
   const handleSubmitPlaylist = async () => {
     if (!playlistName.trim()) {
-      Alert.alert('Error', 'Nama playlist tidak boleh kosong');
+      Alert.alert(t('error'), t('playlistNameRequired'));
       return;
     }
 
@@ -352,7 +352,7 @@ const ProfileScreen = () => {
       });
 
       if (response.data?.success) {
-        Alert.alert('Success', `Playlist "${playlistName}" berhasil dibuat!`);
+        Alert.alert(t('success'), `"${playlistName}" ${t('playlistCreated')}`);
         setShowPlaylistModal(false);
         setPlaylistName('');
         setPlaylistDescription('');
@@ -362,7 +362,7 @@ const ProfileScreen = () => {
       }
     } catch (error) {
       console.error('Error creating playlist:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Gagal membuat playlist. Silakan coba lagi.');
+      Alert.alert(t('error'), error.response?.data?.message || t('playlistCreateFailed'));
     } finally {
       setIsCreatingPlaylist(false);
     }
@@ -391,13 +391,13 @@ const ProfileScreen = () => {
     let title;
     if (activeTab === 'repost') {
       videoList = reposts;
-      title = 'Repost Saya';
+      title = t('reposted');
     } else if (activeTab === 'tag') {
       videoList = taggedVideos;
-      title = 'Video Ditandai';
+      title = t('taggedVideos');
     } else {
       videoList = videos;
-      title = 'Video Saya';
+      title = t('myVideos');
     }
 
     const videoIndex = videoList.findIndex(v => v.id === video.id);
@@ -623,7 +623,7 @@ const ProfileScreen = () => {
                 </TouchableOpacity>
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatCount(userStats.videos)}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Videos</Text>
+                  <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{t('videos')}</Text>
                 </View>
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatCount(userStats.likes)}</Text>
@@ -645,7 +645,7 @@ const ProfileScreen = () => {
               {user.bio.length > 100 && (
                 <TouchableOpacity onPress={() => setExpandBio(!expandBio)}>
                   <Text style={[styles.seeMoreText, { color: colors.textTertiary }]}>
-                    {expandBio ? 'Lihat lebih sedikit' : '...Lihat selengkapnya'}
+                    {expandBio ? t('seeLess') : t('seeMore')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -662,7 +662,7 @@ const ProfileScreen = () => {
                   url = `https://${url}`;
                 }
                 Linking.openURL(url).catch(err => {
-                  Alert.alert('Error', 'Tidak dapat membuka link');
+                  Alert.alert(t('error'), t('error'));
                 });
               }}
             >
@@ -695,17 +695,17 @@ const ProfileScreen = () => {
               style={styles.badgeReapplyButton}
               onPress={() => {
                 Alert.alert(
-                  'Ajukan Ulang Badge',
-                  `Alasan penolakan: ${user.badge_rejection_reason || 'Tidak ada alasan'}\n\nApakah Anda ingin mengajukan ulang?`,
+                  t('badgeApplication'),
+                  `${user.badge_rejection_reason || ''}\n\n${t('confirm')}?`,
                   [
-                    { text: 'Batal', style: 'cancel' },
-                    { text: 'Ajukan Ulang', onPress: () => navigation.navigate('BadgeApplication') }
+                    { text: t('cancel'), style: 'cancel' },
+                    { text: t('apply'), onPress: () => navigation.navigate('BadgeApplication') }
                   ]
                 );
               }}
             >
               <Ionicons name="refresh-outline" size={18} color="#EF4444" />
-              <Text style={styles.badgeReapplyText}>Ajukan Ulang Badge</Text>
+              <Text style={styles.badgeReapplyText}>{t('badgeApplication')}</Text>
             </TouchableOpacity>
           )}
 
@@ -765,7 +765,7 @@ const ProfileScreen = () => {
             {/* Create New Playlist Button */}
             <TouchableOpacity style={[styles.createPlaylistButton, { backgroundColor: colors.primary }]} onPress={handleCreatePlaylist}>
               <Ionicons name="add" size={20} color="#FFFFFF" />
-              <Text style={styles.createPlaylistText}>Create New Playlist</Text>
+              <Text style={styles.createPlaylistText}>{t('addToPlaylist')}</Text>
             </TouchableOpacity>
 
             {/* Playlists List or Empty State */}
@@ -815,9 +815,9 @@ const ProfileScreen = () => {
             ) : (
               <View style={[styles.emptyPlaylistState, { backgroundColor: colors.background }]}>
                 <Ionicons name="albums-outline" size={64} color={colors.iconInactive} />
-                <Text style={[styles.emptyStateText, { color: colors.iconInactive }]}>Belum ada playlist</Text>
+                <Text style={[styles.emptyStateText, { color: colors.iconInactive }]}>{t('noPlaylists')}</Text>
                 <Text style={[styles.emptyStateSubtext, { color: colors.iconInactive }]}>
-                  Buat playlist pertama Anda untuk mengorganisir video favorit
+                  {t('noPlaylists')}
                 </Text>
               </View>
             )}
@@ -846,9 +846,9 @@ const ProfileScreen = () => {
           ) : (
             <View style={[styles.emptyState, { backgroundColor: colors.background }]}>
               <Ionicons name="repeat-outline" size={64} color={colors.iconInactive} />
-              <Text style={[styles.emptyStateText, { color: colors.iconInactive }]}>Belum ada posting ulang</Text>
+              <Text style={[styles.emptyStateText, { color: colors.iconInactive }]}>{t('noVideos')}</Text>
               <Text style={[styles.emptyStateSubtext, { color: colors.iconInactive }]}>
-                Video yang Anda posting ulang akan muncul di sini
+                {t('noVideosDesc')}
               </Text>
             </View>
           )
@@ -868,9 +868,9 @@ const ProfileScreen = () => {
           ) : (
             <View style={[styles.emptyState, { backgroundColor: colors.background }]}>
               <Ionicons name="pricetag-outline" size={64} color={colors.iconInactive} />
-              <Text style={[styles.emptyStateText, { color: colors.iconInactive }]}>Belum ada video tagged</Text>
+              <Text style={[styles.emptyStateText, { color: colors.iconInactive }]}>{t('noVideos')}</Text>
               <Text style={[styles.emptyStateSubtext, { color: colors.iconInactive }]}>
-                Video di mana Anda di-tag akan muncul di sini
+                {t('noVideosDesc')}
               </Text>
             </View>
           )
@@ -1040,7 +1040,7 @@ const ProfileScreen = () => {
                           await refreshUser();
                         } catch (error) {
                           console.error('Failed to toggle badge visibility:', error);
-                          Alert.alert('Error', 'Gagal mengubah visibilitas badge');
+                          Alert.alert(t('error'), t('error'));
                           setShowBadge(!value); // Revert on error
                         }
                       }}

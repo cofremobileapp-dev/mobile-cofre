@@ -44,12 +44,12 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) {
-      Alert.alert('Error', 'Nama tidak boleh kosong');
+      Alert.alert(t('error'), t('nameRequired'));
       return;
     }
 
     if (!editEmail.trim()) {
-      Alert.alert('Error', 'Email tidak boleh kosong');
+      Alert.alert(t('error'), t('emailRequired'));
       return;
     }
 
@@ -60,16 +60,16 @@ const SettingsScreen = ({ navigation }) => {
       // Refresh user data in context
       if (refreshUser) await refreshUser();
 
-      Alert.alert('Sukses', 'Profil berhasil diperbarui', [
+      Alert.alert(t('success'), t('profileUpdated'), [
         {
-          text: 'OK',
+          text: t('ok'),
           onPress: () => setShowEditProfile(false),
         },
       ]);
     } catch (error) {
       console.error('Error updating profile:', error);
-      const errorMessage = error.response?.data?.message || 'Gagal memperbarui profil';
-      Alert.alert('Error', errorMessage);
+      const errorMessage = error.response?.data?.message || t('error');
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -77,17 +77,17 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Semua field harus diisi');
+      Alert.alert(t('error'), t('allFieldsRequired'));
       return;
     }
 
     if (newPassword.length < 8) {
-      Alert.alert('Error', 'Password baru minimal 8 karakter');
+      Alert.alert(t('error'), t('passwordMin8'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Password baru dan konfirmasi tidak cocok');
+      Alert.alert(t('error'), t('passwordMismatch'));
       return;
     }
 
@@ -99,9 +99,9 @@ const SettingsScreen = ({ navigation }) => {
         new_password_confirmation: confirmPassword
       });
 
-      Alert.alert('Sukses', 'Password berhasil diubah', [
+      Alert.alert(t('success'), t('passwordChanged'), [
         {
-          text: 'OK',
+          text: t('ok'),
           onPress: () => {
             setShowChangePassword(false);
             setCurrentPassword('');
@@ -112,8 +112,8 @@ const SettingsScreen = ({ navigation }) => {
       ]);
     } catch (error) {
       console.error('Error changing password:', error);
-      const errorMessage = error.response?.data?.message || 'Gagal mengubah password. Pastikan password lama benar.';
-      Alert.alert('Error', errorMessage);
+      const errorMessage = error.response?.data?.message || t('error');
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -121,15 +121,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleLogout = () => {
     Alert.alert(
-      'Keluar',
-      'Apakah Anda yakin ingin keluar dari akun Anda?',
+      t('logout'),
+      t('logoutConfirm'),
       [
         {
-          text: 'Batal',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Keluar',
+          text: t('logout'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -137,7 +137,7 @@ const SettingsScreen = ({ navigation }) => {
               console.log('✅ Logout successful');
             } catch (error) {
               console.error('❌ Logout error:', error);
-              Alert.alert('Error', 'Gagal logout. Silakan coba lagi.');
+              Alert.alert(t('error'), t('logoutFailed'));
             }
           },
         },
@@ -147,15 +147,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleClearCache = () => {
     Alert.alert(
-      'Hapus Cache',
-      'Ini akan menghapus semua data cache. File yang sudah diundload akan dihapus. Lanjutkan?',
+      t('clearCacheTitle'),
+      t('clearCacheMsg'),
       [
         {
-          text: 'Batal',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Hapus',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -181,10 +181,10 @@ const SettingsScreen = ({ navigation }) => {
                 }
               }
 
-              Alert.alert('Berhasil', 'Cache berhasil dihapus');
+              Alert.alert(t('success'), t('cacheCleared'));
             } catch (error) {
               console.error('Error clearing cache:', error);
-              Alert.alert('Error', 'Gagal menghapus cache');
+              Alert.alert(t('error'), t('cacheClearFailed'));
             } finally {
               setIsLoading(false);
             }
@@ -196,15 +196,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Hapus Akun',
-      'Apakah Anda yakin ingin menghapus akun? Tindakan ini tidak dapat dibatalkan dan semua data Anda akan hilang.',
+      t('deleteAccount'),
+      t('deleteAccountWarning'),
       [
         {
-          text: 'Batal',
+          text: t('cancel'),
           style: 'cancel',
         },
         {
-          text: 'Lanjutkan',
+          text: t('next'),
           style: 'destructive',
           onPress: () => {
             setShowDeleteAccount(true);
@@ -216,7 +216,7 @@ const SettingsScreen = ({ navigation }) => {
 
   const confirmDeleteAccount = async () => {
     if (!deletePassword.trim()) {
-      Alert.alert('Error', 'Password harus diisi');
+      Alert.alert(t('error'), t('allFieldsRequired'));
       return;
     }
 
@@ -228,11 +228,11 @@ const SettingsScreen = ({ navigation }) => {
       setDeletePassword('');
 
       Alert.alert(
-        'Akun Dihapus',
-        'Akun Anda telah berhasil dihapus',
+        t('deleteAccount'),
+        t('accountDeleted'),
         [
           {
-            text: 'OK',
+            text: t('ok'),
             onPress: async () => {
               try {
                 await logout();
@@ -246,9 +246,9 @@ const SettingsScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error deleting account:', error);
       const errorMessage = error.response?.status === 401
-        ? 'Password salah'
-        : error.response?.data?.message || 'Gagal menghapus akun';
-      Alert.alert('Error', errorMessage);
+        ? t('passwordWrong')
+        : error.response?.data?.message || t('error');
+      Alert.alert(t('error'), errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -261,42 +261,42 @@ const SettingsScreen = ({ navigation }) => {
         {
           icon: 'person-outline',
           label: t('editProfile'),
-          subtitle: 'Ubah nama dan email',
+          subtitle: t('editProfileSubtitle'),
           onPress: () => setShowEditProfile(true),
         },
         {
           icon: 'lock-closed-outline',
           label: t('changePassword'),
-          subtitle: 'Ubah password akun Anda',
+          subtitle: t('changePasswordSubtitle'),
           onPress: () => setShowChangePassword(true),
         },
       ],
     },
     {
-      title: 'Aktivitas Anda',
+      title: t('yourActivity'),
       items: [
         {
           icon: 'heart-outline',
-          label: 'Suka',
-          subtitle: 'Video yang Anda sukai',
+          label: t('likes'),
+          subtitle: t('likesSubtitle'),
           onPress: () => navigation.navigate('LikedVideos'),
         },
         {
           icon: 'chatbubble-outline',
-          label: 'Komentar',
-          subtitle: 'Komentar yang Anda tulis',
+          label: t('comments'),
+          subtitle: t('commentsSubtitle'),
           onPress: () => navigation.navigate('MyComments'),
         },
         {
           icon: 'archive-outline',
-          label: 'Arsip',
-          subtitle: 'Lihat story dan postingan yang diarsipkan',
+          label: t('archive'),
+          subtitle: t('archiveSubtitle'),
           onPress: () => navigation.navigate('Archive'),
         },
         {
           icon: 'ban-outline',
-          label: 'Blokir',
-          subtitle: 'Kelola pengguna yang diblokir',
+          label: t('block'),
+          subtitle: t('blockSubtitle'),
           onPress: () => navigation.navigate('BlockedAccounts'),
         },
       ],
@@ -307,37 +307,37 @@ const SettingsScreen = ({ navigation }) => {
         {
           icon: 'color-palette-outline',
           label: t('theme'),
-          subtitle: 'Mode terang, gelap, atau otomatis',
+          subtitle: t('themeSubtitle'),
           onPress: () => navigation.navigate('ThemeSettings'),
         },
         {
           icon: 'notifications-outline',
           label: t('notificationSettings'),
-          subtitle: 'Kelola preferensi notifikasi',
+          subtitle: t('notificationSubtitle'),
           onPress: () => navigation.navigate('NotificationSettings'),
         },
         {
           icon: 'shield-outline',
           label: t('privacy'),
-          subtitle: 'Atur privasi akun Anda',
+          subtitle: t('privacySubtitle'),
           onPress: () => navigation.navigate('AccountPrivacy'),
         },
         {
           icon: 'globe-outline',
           label: t('language'),
-          subtitle: 'Pilih bahasa aplikasi',
+          subtitle: t('languageSubtitle'),
           onPress: () => navigation.navigate('Language'),
         },
         {
           icon: 'server-outline',
           label: t('dataStorage'),
-          subtitle: 'Kelola penggunaan data',
+          subtitle: t('dataStorageSubtitle'),
           onPress: () => navigation.navigate('DataManagement'),
         },
         {
           icon: 'trash-bin-outline',
           label: t('clearCache'),
-          subtitle: 'Bersihkan data cache aplikasi',
+          subtitle: t('clearCacheSubtitle'),
           onPress: handleClearCache,
         },
       ],
@@ -348,14 +348,14 @@ const SettingsScreen = ({ navigation }) => {
         {
           icon: 'information-circle-outline',
           label: t('about'),
-          subtitle: 'Versi, kebijakan, dan syarat',
-          onPress: () => Alert.alert('Covre', 'Versi 1.0.0\n\nAplikasi berbagi video kuliner terbaik untuk creators dan food lovers.'),
+          subtitle: t('aboutSubtitle'),
+          onPress: () => Alert.alert('Covre', `${t('version')} 1.0.0\n\n${t('aboutAppDesc')}`),
         },
         {
           icon: 'help-circle-outline',
           label: t('helpFaq'),
-          subtitle: 'Dapatkan bantuan',
-          onPress: () => Alert.alert('Info', 'Fitur Bantuan segera hadir'),
+          subtitle: t('helpFaqSubtitle'),
+          onPress: () => Alert.alert(t('info'), t('helpComingSoon')),
         },
       ],
     },
@@ -365,7 +365,7 @@ const SettingsScreen = ({ navigation }) => {
         {
           icon: 'log-out-outline',
           label: t('logout'),
-          subtitle: 'Logout dari akun Anda',
+          subtitle: t('logoutSubtitle'),
           onPress: handleLogout,
           warning: true,
         },
@@ -377,7 +377,7 @@ const SettingsScreen = ({ navigation }) => {
         {
           icon: 'trash-outline',
           label: t('deleteAccount'),
-          subtitle: 'Hapus akun Anda secara permanen',
+          subtitle: t('deleteAccountSubtitle'),
           onPress: handleDeleteAccount,
           danger: true,
         },
@@ -487,12 +487,12 @@ const SettingsScreen = ({ navigation }) => {
               contentContainerStyle={styles.modalScrollContent}
             >
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Nama Lengkap</Text>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('fullName')}</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.textPrimary }]}
                   value={editName}
                   onChangeText={setEditName}
-                  placeholder="Masukkan nama lengkap"
+                  placeholder={t('enterFullName')}
                   placeholderTextColor={colors.textTertiary}
                 />
               </View>
@@ -503,7 +503,7 @@ const SettingsScreen = ({ navigation }) => {
                   style={[styles.input, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.textPrimary }]}
                   value={editEmail}
                   onChangeText={setEditEmail}
-                  placeholder="Masukkan email"
+                  placeholder={t('enterEmail')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -516,7 +516,7 @@ const SettingsScreen = ({ navigation }) => {
                 disabled={isLoading}
               >
                 <Text style={styles.saveButtonText}>
-                  {isLoading ? 'Menyimpan...' : 'Simpan Perubahan'}
+                  {isLoading ? t('saving') : t('saveChanges')}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -548,24 +548,24 @@ const SettingsScreen = ({ navigation }) => {
               contentContainerStyle={styles.modalScrollContent}
             >
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Password Saat Ini</Text>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('currentPassword')}</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.textPrimary }]}
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
-                  placeholder="Masukkan password saat ini"
+                  placeholder={t('enterCurrentPassword')}
                   placeholderTextColor={colors.textTertiary}
                   secureTextEntry
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Password Baru</Text>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('newPassword')}</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.textPrimary }]}
                   value={newPassword}
                   onChangeText={setNewPassword}
-                  placeholder="Masukkan password baru (min. 8 karakter)"
+                  placeholder={t('enterNewPassword')}
                   placeholderTextColor={colors.textTertiary}
                   secureTextEntry
                 />
@@ -577,7 +577,7 @@ const SettingsScreen = ({ navigation }) => {
                   style={[styles.input, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.textPrimary }]}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  placeholder="Konfirmasi password baru"
+                  placeholder={t('confirmPassword')}
                   placeholderTextColor={colors.textTertiary}
                   secureTextEntry
                 />
@@ -589,7 +589,7 @@ const SettingsScreen = ({ navigation }) => {
                 disabled={isLoading}
               >
                 <Text style={styles.saveButtonText}>
-                  {isLoading ? 'Mengubah...' : 'Ubah Password'}
+                  {isLoading ? t('changing') : t('changePassword')}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -625,7 +625,7 @@ const SettingsScreen = ({ navigation }) => {
             <View style={[styles.warningBox, { backgroundColor: colors.errorLight }]}>
               <Ionicons name="warning" size={24} color={colors.error} />
               <Text style={styles.warningText}>
-                Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus secara permanen.
+                {t('deleteAccountWarning')}
               </Text>
             </View>
 
@@ -635,7 +635,7 @@ const SettingsScreen = ({ navigation }) => {
                 style={[styles.input, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, color: colors.textPrimary }]}
                 value={deletePassword}
                 onChangeText={setDeletePassword}
-                placeholder="Password untuk konfirmasi"
+                placeholder={t('passwordConfirmation')}
                 placeholderTextColor={colors.textTertiary}
                 secureTextEntry
                 editable={!isLoading}

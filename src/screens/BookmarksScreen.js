@@ -136,7 +136,7 @@ const BookmarksScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error loading bookmarks:', error);
       if (!silent) {
-        Alert.alert('Error', 'Gagal memuat bookmark');
+        Alert.alert(t('error'), t('loadingBookmarks'));
       }
     } finally {
       setIsLoading(false);
@@ -162,7 +162,7 @@ const BookmarksScreen = ({ navigation }) => {
     navigation.navigate('VideoFeed', {
       videos: bookmarks,
       initialIndex: videoIndex >= 0 ? videoIndex : 0,
-      title: 'Tersimpan',
+      title: t('saved'),
     });
   };
 
@@ -182,7 +182,7 @@ const BookmarksScreen = ({ navigation }) => {
       setBookmarks(prev => prev.filter(video => video.id !== videoId));
     } catch (error) {
       console.error('Error removing bookmark:', error);
-      Alert.alert('Error', 'Gagal menghapus bookmark');
+      Alert.alert(t('error'), t('bookmarkRemoveFailed'));
     }
   };
 
@@ -217,7 +217,7 @@ const BookmarksScreen = ({ navigation }) => {
         setShowStoryViewer(true);
       } else {
         console.log('❌ [BookmarksScreen] Story still not found after refresh');
-        Alert.alert('Story tidak ditemukan', 'Silakan coba lagi atau refresh halaman.');
+        Alert.alert(t('storyNotFound'), t('storyNotFoundMsg'));
       }
       return;
     }

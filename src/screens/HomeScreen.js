@@ -133,12 +133,9 @@ const HomeScreen = () => {
       }));
 
       if (error.response?.status === 401) {
-        Alert.alert('Sesi Berakhir', 'Silakan login kembali.');
+        Alert.alert(t('sessionExpired'), t('pleaseLoginAgain'));
       } else if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK') {
-        Alert.alert(
-          'Timeout',
-          'Server tidak merespon. Coba tarik ke bawah untuk refresh.'
-        );
+        Alert.alert(t('timeout'), t('serverNotResponding'));
       } else {
         // Don't show error on initial load, just log it
         console.log('📹 [HomeScreen] Silent error, videos:', videos.length);
