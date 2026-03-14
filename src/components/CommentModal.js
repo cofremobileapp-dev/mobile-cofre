@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/ApiService';
 import { useAuth } from '../contexts/AuthContext';
 
-const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) => {
+const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0, onCommentsCountChange }) => {
   const { user } = useAuth();
   const [comments, setComments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,6 +28,11 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
   const [commentsCount, setCommentsCount] = useState(initialCommentsCount);
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Sync initialCommentsCount when it changes from parent
+  useEffect(() => {
+    setCommentsCount(initialCommentsCount);
+  }, [initialCommentsCount]);
 
   useEffect(() => {
     if (visible) {
@@ -54,7 +59,9 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
 
       setHasMore(response.data.next_page_url !== null);
       setCurrentPage(page);
-      setCommentsCount(response.data.total || 0);
+      const total = response.data.total || 0;
+      setCommentsCount(total);
+      onCommentsCountChange?.(total);
     } catch (error) {
       console.error('Error loading comments:', error);
       Alert.alert('Error', 'Gagal memuat komentar');
@@ -88,8 +95,16 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
       // Add new comment to the top of the list
       const newComment = response.data?.comment || response.data?.data;
       if (newComment) {
+        // Ensure user data is present for display
+        if (!newComment.user && user) {
+          newComment.user = { id: user.id, name: user.name, avatar_url: user.avatar_url };
+        }
         setComments(prev => [newComment, ...prev]);
-        setCommentsCount(prev => prev + 1);
+        setCommentsCount(prev => {
+          const updated = prev + 1;
+          onCommentsCountChange?.(updated);
+          return updated;
+        });
       }
       setCommentText('');
 
@@ -120,7 +135,11 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
 
               // Remove comment from list
               setComments(prev => prev.filter(c => c.id !== commentId));
-              setCommentsCount(prev => prev - 1);
+              setCommentsCount(prev => {
+                const updated = Math.max(0, prev - 1);
+                onCommentsCountChange?.(updated);
+                return updated;
+              });
             } catch (error) {
               console.error('Error deleting comment:', error);
               if (error.response?.status === 403) {
@@ -140,15 +159,6 @@ const CommentModal = ({ visible, onClose, videoId, initialCommentsCount = 0 }) =
     // Get comment owner ID - prefer user_id field, fallback to user.id
     const commentUserId = item.user_id !== undefined ? item.user_id : item.user?.id;
     const currentUserId = user?.id;
-
-    // Debug logging to track ownership issues
-    console.log('🔍 [CommentModal] Checking ownership:', {
-      commentId: item.id,
-      commentUserId,
-      currentUserId,
-      commentUserIdType: typeof commentUserId,
-      currentUserIdType: typeof currentUserId,
-    });
 
     // Strict ownership check - convert both to numbers for accurate comparison
     const isOwnComment = currentUserId != null &&

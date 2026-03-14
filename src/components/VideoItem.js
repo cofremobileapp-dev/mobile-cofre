@@ -844,6 +844,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
         onClose={() => setShowComments(false)}
         videoId={item.id}
         initialCommentsCount={commentsCount}
+        onCommentsCountChange={setCommentsCount}
       />
 
       {/* Share Modal - merged with all options (like TikTok) */}
