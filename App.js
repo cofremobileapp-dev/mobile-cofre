@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { NotificationProvider } from './src/contexts/NotificationContext';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { LanguageProvider } from './src/contexts/LanguageContext';
+import { StoriesProvider } from './src/contexts/StoriesContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import NotificationService from './src/services/NotificationService';
 import { apiService } from './src/services/ApiService';
@@ -65,9 +66,11 @@ export default function App() {
     <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
-          <NotificationProvider>
-            <AppContent />
-          </NotificationProvider>
+          <StoriesProvider>
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
+          </StoriesProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>
