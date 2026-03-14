@@ -375,12 +375,25 @@ const ProfileScreen = () => {
   };
 
   const handleVideoPress = (video) => {
-    // Navigate to full-screen video feed
-    const videoIndex = videos.findIndex(v => v.id === video.id);
+    // Use the correct video list based on active tab
+    let videoList;
+    let title;
+    if (activeTab === 'repost') {
+      videoList = reposts;
+      title = 'Repost Saya';
+    } else if (activeTab === 'tag') {
+      videoList = taggedVideos;
+      title = 'Video Ditandai';
+    } else {
+      videoList = videos;
+      title = 'Video Saya';
+    }
+
+    const videoIndex = videoList.findIndex(v => v.id === video.id);
     navigation.navigate('VideoFeed', {
-      videos: videos,
+      videos: videoList,
       initialIndex: videoIndex >= 0 ? videoIndex : 0,
-      title: 'Video Saya',
+      title,
     });
   };
 
