@@ -1197,6 +1197,22 @@ const StoryViewer = ({
                         <Text style={styles.stickerTimeText}>{sticker.data?.text}</Text>
                       </View>
                     );
+                  case 'image':
+                    return sticker.data?.imageUri ? (
+                      <View style={{
+                        width: 150,
+                        height: 150,
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        backgroundColor: 'rgba(0,0,0,0.2)',
+                      }}>
+                        <Image
+                          source={{ uri: sticker.data.imageUri }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="contain"
+                        />
+                      </View>
+                    ) : null;
                   case 'gif':
                     return (
                       <View style={styles.stickerGifBadge}>

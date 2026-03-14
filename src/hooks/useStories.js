@@ -165,7 +165,31 @@ export const useStories = () => {
       formData.append('duration', String(options.duration || (mediaType === 'video' ? 15 : 5)));
 
       if (options.caption) formData.append('caption', options.caption);
-      if (options.stickers) formData.append('stickers', JSON.stringify(options.stickers));
+
+      // Handle stickers: upload image sticker files alongside the main media
+      if (options.stickers && Array.isArray(options.stickers)) {
+        let stickerImageIndex = 0;
+        const stickersMeta = options.stickers.map((sticker) => {
+          if (sticker.type === 'image' && sticker.data?.imageUri && sticker.data.imageUri.startsWith('file://')) {
+            // Add the image file to FormData with indexed key
+            const idx = stickerImageIndex++;
+            const stickerMime = getMimeType(sticker.data.imageUri, 'image');
+            formData.append(`sticker_images[${idx}]`, {
+              uri: sticker.data.imageUri,
+              type: stickerMime.mimeType,
+              name: `sticker_${Date.now()}_${idx}.${stickerMime.extension}`,
+            });
+            console.log('📤 [useStories] Adding image sticker file:', idx);
+            // Replace local URI with placeholder that backend will fill
+            return { ...sticker, data: { ...sticker.data, imageUri: `__STICKER_IMAGE_${idx}__` } };
+          }
+          return sticker;
+        });
+        formData.append('stickers', JSON.stringify(stickersMeta));
+      } else if (options.stickers) {
+        formData.append('stickers', JSON.stringify(options.stickers));
+      }
+
       if (options.text_elements) formData.append('text_elements', options.text_elements);
       if (options.filter) formData.append('filter', options.filter);
       if (options.allowResharing !== undefined) {
