@@ -23,49 +23,64 @@ const LikedVideosScreen = ({ navigation }) => {
   const ITEM_SIZE = (SCREEN_WIDTH - 8) / 3;
 
   const [likedVideos, setLikedVideos] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadLikedVideos(1, true);
-    }, [])
-  );
-
-  const loadLikedVideos = async (page = 1, silent = false) => {
+  const loadLikedVideos = useCallback(async (page = 1, isRefresh = false) => {
     try {
-      if (page === 1 && !silent) setIsLoading(true);
+      if (page === 1 && !isRefresh) setIsLoading(true);
       if (page > 1) setIsLoadingMore(true);
 
+      console.log('❤️ [LikedVideos] Fetching page', page);
       const response = await apiService.getLikedVideos(page);
       const data = response.data;
-      const videos = data?.data || data || [];
+      console.log('❤️ [LikedVideos] Response keys:', Object.keys(data || {}), 'data count:', Array.isArray(data?.data) ? data.data.length : 'N/A');
+
+      // Handle multiple response shapes
+      let videos = [];
+      if (Array.isArray(data?.data)) {
+        videos = data.data;
+      } else if (Array.isArray(data)) {
+        videos = data;
+      } else {
+        console.warn('❤️ [LikedVideos] Unexpected response format:', JSON.stringify(data).substring(0, 200));
+      }
 
       if (page === 1) {
-        setLikedVideos(Array.isArray(videos) ? videos : []);
+        setLikedVideos(videos);
       } else {
-        setLikedVideos(prev => [...prev, ...(Array.isArray(videos) ? videos : [])]);
+        setLikedVideos(prev => [...prev, ...videos]);
       }
 
       setHasMore(!!data?.next_page_url);
       setCurrentPage(page);
+      setInitialLoadDone(true);
+      console.log('❤️ [LikedVideos] Loaded', videos.length, 'videos, hasMore:', !!data?.next_page_url);
     } catch (error) {
-      console.error('Error loading liked videos:', error);
+      console.error('❤️ [LikedVideos] Error:', error?.message, error?.response?.status, error?.response?.data);
       if (page === 1) setLikedVideos([]);
+      setInitialLoadDone(true);
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
       setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadLikedVideos(1);
+    }, [loadLikedVideos])
+  );
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     loadLikedVideos(1, true);
-  }, []);
+  }, [loadLikedVideos]);
 
   const handleUnlike = async (videoId) => {
     try {
@@ -129,7 +144,7 @@ const LikedVideosScreen = ({ navigation }) => {
     );
   };
 
-  if (isLoading) {
+  if (isLoading || !initialLoadDone) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>

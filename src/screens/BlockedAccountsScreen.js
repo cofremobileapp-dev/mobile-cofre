@@ -32,10 +32,17 @@ const BlockedAccountsScreen = () => {
   const loadBlockedUsers = async () => {
     try {
       setIsLoading(true);
+      console.log('🚫 [BlockedAccounts] Fetching blocked users');
       const response = await apiService.getBlockedUsers();
-      setBlockedUsers(response.data.data || []);
+      const data = response.data;
+      console.log('🚫 [BlockedAccounts] Response:', JSON.stringify(data).substring(0, 300));
+
+      // Handle multiple response shapes
+      const users = data?.data || data?.blocked_users || [];
+      setBlockedUsers(Array.isArray(users) ? users : []);
+      console.log('🚫 [BlockedAccounts] Loaded', Array.isArray(users) ? users.length : 0, 'blocked users');
     } catch (error) {
-      console.error('Error loading blocked users:', error);
+      console.error('🚫 [BlockedAccounts] Error:', error?.message, error?.response?.status, error?.response?.data);
       Alert.alert('Error', 'Gagal memuat daftar pengguna yang diblokir');
     } finally {
       setIsLoading(false);

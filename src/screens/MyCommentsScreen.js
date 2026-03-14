@@ -19,49 +19,64 @@ import { apiService } from '../services/ApiService';
 const MyCommentsScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const [comments, setComments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadMyComments(1, true);
-    }, [])
-  );
-
-  const loadMyComments = async (page = 1, silent = false) => {
+  const loadMyComments = useCallback(async (page = 1, isRefresh = false) => {
     try {
-      if (page === 1 && !silent) setIsLoading(true);
+      if (page === 1 && !isRefresh) setIsLoading(true);
       if (page > 1) setIsLoadingMore(true);
 
+      console.log('💬 [MyComments] Fetching page', page);
       const response = await apiService.getMyComments(page);
       const data = response.data;
-      const commentsList = data?.data || data || [];
+      console.log('💬 [MyComments] Response keys:', Object.keys(data || {}), 'data count:', Array.isArray(data?.data) ? data.data.length : 'N/A');
+
+      // Handle multiple response shapes
+      let commentsList = [];
+      if (Array.isArray(data?.data)) {
+        commentsList = data.data;
+      } else if (Array.isArray(data)) {
+        commentsList = data;
+      } else {
+        console.warn('💬 [MyComments] Unexpected response format:', JSON.stringify(data).substring(0, 200));
+      }
 
       if (page === 1) {
-        setComments(Array.isArray(commentsList) ? commentsList : []);
+        setComments(commentsList);
       } else {
-        setComments(prev => [...prev, ...(Array.isArray(commentsList) ? commentsList : [])]);
+        setComments(prev => [...prev, ...commentsList]);
       }
 
       setHasMore(!!data?.next_page_url);
       setCurrentPage(page);
+      setInitialLoadDone(true);
+      console.log('💬 [MyComments] Loaded', commentsList.length, 'comments, hasMore:', !!data?.next_page_url);
     } catch (error) {
-      console.error('Error loading comments:', error);
+      console.error('💬 [MyComments] Error:', error?.message, error?.response?.status, error?.response?.data);
       if (page === 1) setComments([]);
+      setInitialLoadDone(true);
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
       setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMyComments(1);
+    }, [loadMyComments])
+  );
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     loadMyComments(1, true);
-  }, []);
+  }, [loadMyComments]);
 
   const handleDeleteComment = (commentId) => {
     Alert.alert(
@@ -141,7 +156,7 @@ const MyCommentsScreen = ({ navigation }) => {
     );
   };
 
-  if (isLoading) {
+  if (isLoading || !initialLoadDone) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
