@@ -465,12 +465,14 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
         allowsPictureInPicture={false}
       />
 
-      {/* Video Counter */}
-      <View style={videoItemStyles.videoCounter}>
-        <Text style={videoItemStyles.videoCounterText}>
-          {currentIndex + 1} / {totalVideos}
-        </Text>
-      </View>
+      {/* Video Counter - only show on active video */}
+      {isActive && (
+        <View style={videoItemStyles.videoCounter}>
+          <Text style={videoItemStyles.videoCounterText}>
+            {currentIndex + 1}/{totalVideos}
+          </Text>
+        </View>
+      )}
 
       {/* Tap to Play/Pause with Smooth Animation */}
       <TouchableOpacity
@@ -891,17 +893,19 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
   },
   videoCounter: {
     position: 'absolute',
-    top: 120,
+    top: 90,
     alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    zIndex: 10,
   },
   videoCounterText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   rightActions: {
     position: 'absolute',
