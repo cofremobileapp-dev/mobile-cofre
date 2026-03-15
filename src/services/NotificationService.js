@@ -50,6 +50,11 @@ class NotificationService {
       // Get Expo Push Token (ULTRA DEFENSIVE)
       let token;
       try {
+        // Bypass push token lookup entirely if running in Expo Go to prevent scary errors
+        if (Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient') {
+          return null;
+        }
+
         token = await Promise.race([
           Notifications.getExpoPushTokenAsync({
             projectId: Constants.expoConfig?.extra?.eas?.projectId || undefined,
@@ -95,11 +100,11 @@ class NotificationService {
 
     // Clean up any existing listeners to prevent accumulation/memory leaks
     if (this.notificationListener) {
-      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener.remove();
       this.notificationListener = null;
     }
     if (this.responseListener) {
-      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener.remove();
       this.responseListener = null;
     }
 
@@ -145,10 +150,10 @@ class NotificationService {
     // Return cleanup function
     return () => {
       if (this.notificationListener) {
-        Notifications.removeNotificationSubscription(this.notificationListener);
+        this.notificationListener.remove();
       }
       if (this.responseListener) {
-        Notifications.removeNotificationSubscription(this.responseListener);
+        this.responseListener.remove();
       }
     };
   }

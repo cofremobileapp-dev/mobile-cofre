@@ -133,6 +133,7 @@ const HomeStackNavigator = () => {
 // Profile Stack Navigator
 const ProfileStackNavigator = () => {
   const { colors } = useTheme();
+  const { t } = useLanguage();
   return (
     <ProfileStack.Navigator>
       <ProfileStack.Screen
