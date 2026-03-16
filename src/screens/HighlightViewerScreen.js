@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
+  Text,
+  TouchableOpacity,
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import StoryViewer from '../components/Story/StoryViewer';
 import { apiService } from '../services/ApiService';
 
@@ -73,6 +76,28 @@ const HighlightViewerScreen = ({ route, navigation }) => {
       <View style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}>
         <StatusBar barStyle="light-content" />
         <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
+
+  // Show empty state instead of blank white screen when no stories
+  if (!stories || stories.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+        <StatusBar barStyle="light-content" />
+        <Ionicons name="images-outline" size={64} color="#6B7280" />
+        <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600', marginTop: 16, textAlign: 'center' }}>
+          Highlight Kosong
+        </Text>
+        <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+          Belum ada story di highlight "{highlight.title || highlight.name}"
+        </Text>
+        <TouchableOpacity
+          style={{ marginTop: 24, backgroundColor: '#06402B', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>Kembali</Text>
+        </TouchableOpacity>
       </View>
     );
   }

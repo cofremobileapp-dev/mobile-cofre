@@ -130,21 +130,24 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
     try {
       setIsLoadingStories(true);
 
-      // Fetch stories from MULTIPLE sources to ensure we get them
+      // Fetch stories from MULTIPLE sources to ensure we get all (active, expired, archived)
       const results = await Promise.allSettled([
+        apiService.get('/stories/all-my-stories'),
         apiService.getArchivedStories(),
         apiService.getMyStories(),
         apiService.get('/stories?all=1'),
       ]);
 
-      const archivedRes = results[0].status === 'fulfilled' ? results[0].value : { data: [] };
-      const myStoriesRes = results[1].status === 'fulfilled' ? results[1].value : { data: [] };
-      const allStoriesRes = results[2].status === 'fulfilled' ? results[2].value : { data: [] };
+      const allMyRes = results[0].status === 'fulfilled' ? results[0].value : { data: [] };
+      const archivedRes = results[1].status === 'fulfilled' ? results[1].value : { data: [] };
+      const myStoriesRes = results[2].status === 'fulfilled' ? results[2].value : { data: [] };
+      const allStoriesRes = results[3].status === 'fulfilled' ? results[3].value : { data: [] };
 
-      console.log('📌 [HighlightsBar] Archived:', results[0].status, JSON.stringify(archivedRes?.data).substring(0, 200));
-      console.log('📌 [HighlightsBar] MyStories:', results[1].status, JSON.stringify(myStoriesRes?.data).substring(0, 200));
-      console.log('📌 [HighlightsBar] AllStories:', results[2].status);
+      console.log('📌 [HighlightsBar] AllMyStories:', results[0].status);
+      console.log('📌 [HighlightsBar] Archived:', results[1].status);
+      console.log('📌 [HighlightsBar] MyStories:', results[2].status);
 
+      const allMy = extractStoriesArray(allMyRes?.data);
       const archived = extractStoriesArray(archivedRes?.data);
       const myStories = extractStoriesArray(myStoriesRes?.data);
 
@@ -154,10 +157,10 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
         ? allStories.filter(s => Number(s.user_id) === Number(userId))
         : allStories;
 
-      console.log('📌 [HighlightsBar] Counts - archived:', archived.length, 'my:', myStories.length, 'fromAll:', myFromAll.length);
+      console.log('📌 [HighlightsBar] Counts - allMy:', allMy.length, 'archived:', archived.length, 'my:', myStories.length, 'fromAll:', myFromAll.length);
 
       // Combine all sources and dedupe by ID
-      const combined = [...archived, ...myStories, ...myFromAll];
+      const combined = [...allMy, ...archived, ...myStories, ...myFromAll];
       const seen = new Set();
       const uniqueStories = combined.filter(story => {
         const id = String(story.id);
@@ -580,9 +583,13 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
 
   // Remove a story from the highlight
   const handleRemoveStoryFromHighlight = async (storyId) => {
+    const remainingCount = editCurrentStories.length - 1;
+
     Alert.alert(
       'Hapus Story',
-      'Hapus story ini dari highlight?',
+      remainingCount === 0
+        ? 'Ini adalah story terakhir. Menghapusnya akan membuat highlight kosong. Lanjutkan?'
+        : 'Hapus story ini dari highlight?',
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -591,7 +598,25 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
           onPress: async () => {
             try {
               await apiService.removeStoryFromHighlight(editingHighlight.id, storyId);
-              setEditCurrentStories(prev => prev.filter(s => s.id !== storyId));
+              const newStories = editCurrentStories.filter(s => s.id !== storyId);
+              setEditCurrentStories(newStories);
+
+              // Update the highlight items_count in main list
+              setHighlights(prev =>
+                prev.map(h =>
+                  h.id === editingHighlight.id
+                    ? { ...h, items_count: newStories.length }
+                    : h
+                )
+              );
+
+              // If the removed story was the cover, reset cover to next available story
+              const removedStory = editCurrentStories.find(s => s.id === storyId);
+              const removedUrl = removedStory?.media_url || removedStory?.thumbnail_url;
+              if (removedUrl && (editCoverFromStoryUrl === removedUrl)) {
+                setEditCoverFromStoryUrl(null);
+              }
+
               Alert.alert('Berhasil', 'Story dihapus dari highlight');
             } catch (error) {
               console.error('📌 [HighlightsBar] Error removing story:', error?.response?.status);
@@ -1157,7 +1182,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
               </View>
             ) : archivedStories.length > 0 ? (
               <FlatList
-                data={archivedStories.filter(s => !editCurrentStories.some(cs => cs.id === s.id))}
+                data={archivedStories.filter(s => !editCurrentStories.some(cs => String(cs.id) === String(s.id)))}
                 numColumns={3}
                 keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={styles.storiesGrid}
