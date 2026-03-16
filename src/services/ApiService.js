@@ -923,6 +923,30 @@ class ApiService {
     return this.put(`/highlights/${highlightId}`, data);
   }
 
+  async updateHighlightWithCover(highlightId, imageUri, extraFields = {}) {
+    const formData = new FormData();
+    const uriParts = imageUri.split('.');
+    const fileType = uriParts[uriParts.length - 1].toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    formData.append('cover_image', {
+      uri: imageUri,
+      name: `highlight_cover_${Date.now()}.${fileType}`,
+      type: mimeTypes[fileType] || 'image/jpeg',
+    });
+    // Laravel method spoofing: POST with _method=PUT for file uploads
+    formData.append('_method', 'PUT');
+    Object.entries(extraFields).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+    return this.uploadFile(`/highlights/${highlightId}`, formData);
+  }
+
   async deleteHighlight(highlightId) {
     return this.delete(`/highlights/${highlightId}`);
   }

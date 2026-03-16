@@ -23,6 +23,7 @@ import VideoPreviewModal from '../components/VideoPreviewModal';
 import { formatPrice } from '../utils/formatUtils';
 import StoryViewer from '../components/Story/StoryViewer';
 import useStories from '../hooks/useStories';
+import HighlightsBar from '../components/HighlightsBar';
 
 // Grid calculation constants (same as ProfileScreen)
 const COLUMNS = 3;
@@ -608,6 +609,15 @@ const OtherUserProfileScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Highlights */}
+        <HighlightsBar
+          userId={userId}
+          isOwnProfile={false}
+          onHighlightPress={(highlight) => {
+            navigation.navigate('HighlightViewer', { highlight });
+          }}
+        />
 
         {/* Tab Bar */}
         <View style={[styles.tabBar, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>

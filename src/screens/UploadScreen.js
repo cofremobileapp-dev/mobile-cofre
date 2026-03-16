@@ -26,6 +26,20 @@ import { formatPrice } from '../utils/formatUtils';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 
+// Filter presets with overlay colors
+const FILTER_PRESETS = [
+  { id: 'normal', name: 'Normal', overlay: null },
+  { id: 'warm', name: 'Warm', overlay: 'rgba(255, 165, 0, 0.15)' },
+  { id: 'cool', name: 'Cool', overlay: 'rgba(0, 100, 255, 0.15)' },
+  { id: 'vintage', name: 'Vintage', overlay: 'rgba(160, 120, 60, 0.22)' },
+  { id: 'fade', name: 'Fade', overlay: 'rgba(255, 255, 255, 0.25)' },
+  { id: 'dramatic', name: 'Drama', overlay: 'rgba(0, 0, 0, 0.2)' },
+  { id: 'rose', name: 'Rose', overlay: 'rgba(255, 100, 130, 0.15)' },
+  { id: 'emerald', name: 'Emerald', overlay: 'rgba(16, 185, 129, 0.12)' },
+  { id: 'sunset', name: 'Sunset', overlay: 'rgba(255, 100, 50, 0.18)' },
+  { id: 'moonlight', name: 'Moonlight', overlay: 'rgba(100, 100, 200, 0.18)' },
+];
+
 const UploadScreen = () => {
   const navigation = useNavigation();
   const { isDark, colors } = useTheme();
@@ -52,6 +66,9 @@ const UploadScreen = () => {
   const [steps, setSteps] = useState('');
   const [price, setPrice] = useState('');
   const [servings, setServings] = useState('');
+
+  // Filter state
+  const [selectedFilter, setSelectedFilter] = useState('normal');
 
   // Tag users
   const [taggedUsers, setTaggedUsers] = useState([]);
@@ -473,11 +490,12 @@ const UploadScreen = () => {
         budget: budget,
         time: time,
         location: location || null,
-        media_type: mediaType, // Add media type to menu_data
+        media_type: mediaType,
         ingredients: ingredients || null,
         steps: steps || null,
         price: price || null,
         servings: servings || null,
+        filter: selectedFilter !== 'normal' ? selectedFilter : null,
       };
       formData.append('menu_data', JSON.stringify(menuData));
 
@@ -532,6 +550,7 @@ const UploadScreen = () => {
       setServings('');
       setTaggedUsers([]);
       setSelectedPlaylistIds([]);
+      setSelectedFilter('normal');
     } catch (error) {
       console.error('❌ Upload error:', error);
       console.error('❌ Error response:', error.response?.data);
@@ -587,33 +606,92 @@ const UploadScreen = () => {
         )}
 
         {mediaUri && thumbnailUri && (
-          <View style={styles.videoPreviewContainer}>
-            <Image
-              source={{ uri: thumbnailUri }}
-              style={styles.videoPreview}
-              resizeMode="cover"
-            />
-            {mediaType === 'video' && (
-              <View style={styles.mediaTypeBadge}>
-                <Ionicons name="videocam" size={16} color="#FFFFFF" />
-                <Text style={styles.mediaTypeBadgeText}>Video</Text>
+          <>
+            <View style={styles.videoPreviewContainer}>
+              <Image
+                source={{ uri: thumbnailUri }}
+                style={styles.videoPreview}
+                resizeMode="cover"
+              />
+              {/* Filter Overlay on Preview */}
+              {selectedFilter !== 'normal' && (
+                <View
+                  style={[styles.filterOverlayPreview, {
+                    backgroundColor: FILTER_PRESETS.find(f => f.id === selectedFilter)?.overlay,
+                  }]}
+                  pointerEvents="none"
+                />
+              )}
+              {mediaType === 'video' && (
+                <View style={styles.mediaTypeBadge}>
+                  <Ionicons name="videocam" size={16} color="#FFFFFF" />
+                  <Text style={styles.mediaTypeBadgeText}>Video</Text>
+                </View>
+              )}
+              {mediaType === 'image' && (
+                <View style={styles.mediaTypeBadge}>
+                  <Ionicons name="image" size={16} color="#FFFFFF" />
+                  <Text style={styles.mediaTypeBadgeText}>Foto</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.changeVideoButton}
+                onPress={pickMedia}
+                disabled={isUploading}
+              >
+                <Ionicons name="refresh" size={20} color="#FFFFFF" />
+                <Text style={styles.changeVideoText}>Ubah Media</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Filter Selector */}
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <Ionicons name="color-filter" size={20} color={colors.textSecondary} />
+                <Text style={[styles.filterSectionLabel, { color: colors.textSecondary }]}>Filter</Text>
+                {selectedFilter !== 'normal' && (
+                  <TouchableOpacity onPress={() => setSelectedFilter('normal')}>
+                    <Text style={[styles.filterResetText, { color: colors.primary }]}>Reset</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
-            {mediaType === 'image' && (
-              <View style={styles.mediaTypeBadge}>
-                <Ionicons name="image" size={16} color="#FFFFFF" />
-                <Text style={styles.mediaTypeBadgeText}>Foto</Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.changeVideoButton}
-              onPress={pickMedia}
-              disabled={isUploading}
-            >
-              <Ionicons name="refresh" size={20} color="#FFFFFF" />
-              <Text style={styles.changeVideoText}>Ubah Media</Text>
-            </TouchableOpacity>
-          </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterScrollContent}
+              >
+                {FILTER_PRESETS.map((filter) => (
+                  <TouchableOpacity
+                    key={filter.id}
+                    style={styles.filterItem}
+                    onPress={() => setSelectedFilter(filter.id)}
+                    disabled={isUploading}
+                  >
+                    <View style={[
+                      styles.filterThumbnailContainer,
+                      selectedFilter === filter.id && { borderColor: colors.primary },
+                    ]}>
+                      <Image
+                        source={{ uri: thumbnailUri }}
+                        style={styles.filterThumbnail}
+                        resizeMode="cover"
+                      />
+                      {filter.overlay && (
+                        <View style={[styles.filterThumbnailOverlay, { backgroundColor: filter.overlay }]} />
+                      )}
+                    </View>
+                    <Text style={[
+                      styles.filterItemName,
+                      { color: colors.textSecondary },
+                      selectedFilter === filter.id && { color: colors.primary, fontWeight: '700' },
+                    ]}>
+                      {filter.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </>
         )}
 
         {/* AI Food Scanner Button - REMOVED per user request */}
@@ -1094,12 +1172,71 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 12,
     height: 250,
   },
   videoPreview: {
     width: '100%',
     height: '100%',
+  },
+  filterOverlayPreview: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+  },
+  filterSection: {
+    marginBottom: 20,
+  },
+  filterSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterSectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  filterResetText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  filterScrollContent: {
+    gap: 10,
+    paddingRight: 10,
+  },
+  filterItem: {
+    alignItems: 'center',
+    width: 64,
+  },
+  filterThumbnailContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  filterThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  filterThumbnailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  filterItemName: {
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
   },
   mediaTypeBadge: {
     position: 'absolute',

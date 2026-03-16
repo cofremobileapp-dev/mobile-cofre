@@ -294,6 +294,20 @@ const DraggableStickerItem = ({ sticker, onDelete, screenWidth, screenHeight }) 
   );
 };
 
+// Filter presets with overlay colors
+const FILTER_PRESETS = [
+  { id: 'normal', name: 'Normal', overlay: null },
+  { id: 'warm', name: 'Warm', overlay: 'rgba(255, 165, 0, 0.15)' },
+  { id: 'cool', name: 'Cool', overlay: 'rgba(0, 100, 255, 0.15)' },
+  { id: 'vintage', name: 'Vintage', overlay: 'rgba(160, 120, 60, 0.22)' },
+  { id: 'fade', name: 'Fade', overlay: 'rgba(255, 255, 255, 0.25)' },
+  { id: 'dramatic', name: 'Drama', overlay: 'rgba(0, 0, 0, 0.2)' },
+  { id: 'rose', name: 'Rose', overlay: 'rgba(255, 100, 130, 0.15)' },
+  { id: 'emerald', name: 'Emerald', overlay: 'rgba(16, 185, 129, 0.12)' },
+  { id: 'sunset', name: 'Sunset', overlay: 'rgba(255, 100, 50, 0.18)' },
+  { id: 'moonlight', name: 'Moonlight', overlay: 'rgba(100, 100, 200, 0.18)' },
+];
+
 const STICKER_TYPES = [
   { type: 'location', label: 'Lokasi', icon: 'location-outline' },
   { type: 'mention', label: 'Mention', icon: 'at-outline' },
@@ -320,6 +334,9 @@ const StoryEditorScreenSimple = ({ route }) => {
   const [textElements, setTextElements] = useState([]);
   const [editingElementId, setEditingElementId] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Filter state
+  const [selectedFilter, setSelectedFilter] = useState('normal');
 
   // Sticker states
   const [stickerElements, setStickerElements] = useState([]);
@@ -606,6 +623,7 @@ const StoryEditorScreenSimple = ({ route }) => {
         duration: mediaType === 'video' ? 15 : 5,
         text_elements: textElementsData.length > 0 ? JSON.stringify(textElementsData) : null,
         stickers: stickerElementsData.length > 0 ? stickerElementsData : null,
+        filter: selectedFilter !== 'normal' ? selectedFilter : null,
       });
 
       // Success - navigate back to home
@@ -668,6 +686,16 @@ const StoryEditorScreenSimple = ({ route }) => {
             shouldPlay
             isLooping
             isMuted
+          />
+        )}
+        {/* Filter Overlay */}
+        {selectedFilter !== 'normal' && (
+          <View
+            style={[
+              styles.filterOverlay,
+              { backgroundColor: FILTER_PRESETS.find(f => f.id === selectedFilter)?.overlay },
+            ]}
+            pointerEvents="none"
           />
         )}
       </View>
@@ -735,7 +763,68 @@ const StoryEditorScreenSimple = ({ route }) => {
               {textElements.length > 0 ? `Teks (${textElements.length})` : 'Teks'}
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.addTextTopButton, selectedFilter !== 'normal' && { backgroundColor: 'rgba(16, 185, 129, 0.5)' }]}
+            onPress={() => {
+              // Cycle to next filter
+              const currentIndex = FILTER_PRESETS.findIndex(f => f.id === selectedFilter);
+              const nextIndex = (currentIndex + 1) % FILTER_PRESETS.length;
+              setSelectedFilter(FILTER_PRESETS[nextIndex].id);
+            }}
+            disabled={isUploading}
+          >
+            <Ionicons name="color-filter" size={24} color="#FFFFFF" />
+            <Text style={styles.addTextTopLabel}>
+              {selectedFilter !== 'normal' ? FILTER_PRESETS.find(f => f.id === selectedFilter)?.name : 'Filter'}
+            </Text>
+          </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Filter Selector Bar */}
+      <View style={styles.filterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {FILTER_PRESETS.map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.filterItem,
+                selectedFilter === filter.id && styles.filterItemSelected,
+              ]}
+              onPress={() => setSelectedFilter(filter.id)}
+              disabled={isUploading}
+            >
+              <View style={[
+                styles.filterPreviewContainer,
+                selectedFilter === filter.id && { borderColor: '#10B981' },
+              ]}>
+                <Image
+                  source={{ uri: mediaUri }}
+                  style={styles.filterPreviewImage}
+                  resizeMode="cover"
+                />
+                {filter.overlay && (
+                  <View
+                    style={[styles.filterPreviewOverlay, { backgroundColor: filter.overlay }]}
+                  />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.filterName,
+                  selectedFilter === filter.id && styles.filterNameSelected,
+                ]}
+              >
+                {filter.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Bottom Action Bar */}
@@ -1173,6 +1262,62 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
+  },
+  filterOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  filterBar: {
+    position: 'absolute',
+    bottom: 90,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    paddingVertical: 10,
+  },
+  filterScrollContent: {
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  filterItem: {
+    alignItems: 'center',
+    width: 64,
+  },
+  filterItemSelected: {
+    opacity: 1,
+  },
+  filterPreviewContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  filterPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  filterPreviewOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  filterName: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  filterNameSelected: {
+    color: '#10B981',
+    fontWeight: '700',
   },
   topBar: {
     position: 'absolute',

@@ -13,6 +13,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { apiService } from '../services/ApiService';
 
@@ -41,6 +42,8 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
   const [editSelectedNewStories, setEditSelectedNewStories] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingEditStories, setIsLoadingEditStories] = useState(false);
+  const [createCoverImageUri, setCreateCoverImageUri] = useState(null);
+  const [editCoverImageUri, setEditCoverImageUri] = useState(null);
 
   useEffect(() => {
     loadHighlights();
@@ -175,6 +178,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
   const handleCreateHighlight = () => {
     setHighlightName('');
     setSelectedStories([]);
+    setCreateCoverImageUri(null);
     setShowCreateModal(true);
   };
 
@@ -198,6 +202,49 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
     });
   };
 
+  const pickCoverImage = async (mode = 'create') => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert('Izin Diperlukan', 'Izinkan akses ke galeri untuk memilih cover image');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (mode === 'create') {
+        setCreateCoverImageUri(result.assets[0].uri);
+      } else {
+        setEditCoverImageUri(result.assets[0].uri);
+      }
+    }
+  };
+
+  const buildCoverFormData = (imageUri, extraFields = {}) => {
+    const formData = new FormData();
+    const uriParts = imageUri.split('.');
+    const fileType = uriParts[uriParts.length - 1].toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    formData.append('cover_image', {
+      uri: imageUri,
+      name: `highlight_cover_${Date.now()}.${fileType}`,
+      type: mimeTypes[fileType] || 'image/jpeg',
+    });
+    Object.entries(extraFields).forEach(([key, value]) => {
+      formData.append(key, value);
+    });
+    return formData;
+  };
+
   const handleSubmitHighlight = async () => {
     if (selectedStories.length === 0) {
       Alert.alert('Error', 'Pilih minimal 1 story');
@@ -211,31 +258,50 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
       const coverStory = archivedStories.find(s => s.id === selectedStories[0]);
       const coverUrl = coverStory?.media_url || coverStory?.thumbnail_url || null;
       const trimmedName = highlightName.trim();
+      const hasCustomCover = !!createCoverImageUri;
 
       console.log('📌 [HighlightsBar] Creating highlight:', {
         name: trimmedName,
         storyCount: selectedStories.length,
         storyIds: selectedStories,
         coverUrl: coverUrl?.substring(0, 50),
+        hasCustomCover,
       });
 
       // Try creating with multiple payload formats for backend compatibility
       let createResponse = null;
       let lastError = null;
 
+      // If user picked a custom cover image, use FormData upload
+      if (hasCustomCover) {
+        try {
+          const formData = buildCoverFormData(createCoverImageUri, { title: trimmedName });
+          selectedStories.forEach((id, index) => {
+            formData.append(`story_ids[${index}]`, id);
+          });
+          createResponse = await apiService.uploadFile('/highlights', formData);
+          console.log('📌 [HighlightsBar] Create with custom cover success:', JSON.stringify(createResponse).substring(0, 500));
+        } catch (err) {
+          lastError = err;
+          console.log('📌 [HighlightsBar] Create with custom cover failed:', err?.response?.status || err?.status, JSON.stringify(err?.response?.data || err?.data).substring(0, 300));
+        }
+      }
+
       // Attempt 1: story_ids as array (most common Laravel format)
-      try {
-        createResponse = await apiService.createHighlight({
-          title: trimmedName,
-          name: trimmedName,
-          cover_url: coverUrl,
-          cover_image_url: coverUrl,
-          story_ids: selectedStories,
-        });
-        console.log('📌 [HighlightsBar] Create attempt 1 success:', JSON.stringify(createResponse.data).substring(0, 500));
-      } catch (err) {
-        lastError = err;
-        console.log('📌 [HighlightsBar] Create attempt 1 failed:', err?.response?.status, JSON.stringify(err?.response?.data).substring(0, 300));
+      if (!createResponse) {
+        try {
+          createResponse = await apiService.createHighlight({
+            title: trimmedName,
+            name: trimmedName,
+            cover_url: coverUrl,
+            cover_image_url: coverUrl,
+            story_ids: selectedStories,
+          });
+          console.log('📌 [HighlightsBar] Create attempt 1 success:', JSON.stringify(createResponse.data).substring(0, 500));
+        } catch (err) {
+          lastError = err;
+          console.log('📌 [HighlightsBar] Create attempt 1 failed:', err?.response?.status, JSON.stringify(err?.response?.data).substring(0, 300));
+        }
       }
 
       // Attempt 2: stories as array field name
@@ -275,7 +341,8 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
         throw lastError || new Error('Gagal membuat highlight');
       }
 
-      const resData = createResponse.data;
+      // uploadFile returns { data, status } directly, apiService methods return { data: { ... } }
+      const resData = createResponse.data || createResponse;
 
       // Extract highlight object from various response formats
       const newHighlightObj =
@@ -310,12 +377,13 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
       const savedName = trimmedName;
 
       // Optimistic update: immediately add the new highlight to local state
+      const optimisticCover = hasCustomCover ? createCoverImageUri : coverUrl;
       const optimisticHighlight = {
         id: highlightId || Date.now(),
         title: savedName,
         name: savedName,
-        cover_image_url: coverUrl,
-        cover_url: coverUrl,
+        cover_image_url: optimisticCover,
+        cover_url: optimisticCover,
         items_count: selectedStories.length,
         stories: [],
         ...(typeof newHighlightObj === 'object' && newHighlightObj !== null ? newHighlightObj : {}),
@@ -327,6 +395,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
       setShowSelectStoriesModal(false);
       setHighlightName('');
       setSelectedStories([]);
+      setCreateCoverImageUri(null);
 
       // Also reload from API in background to sync with server (without showing loading spinner)
       // Use longer delay to give server time to process
@@ -409,6 +478,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
     setShowOptionsModal(false);
     const hl = editingHighlight;
     setEditTitle(hl.title || hl.name || '');
+    setEditCoverImageUri(null);
     setShowEditModal(true);
 
     // Load current stories in this highlight
@@ -439,28 +509,42 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
     }
     try {
       setIsSaving(true);
-      const updateData = { title: editTitle.trim() };
 
-      // If there are current stories, use the first one as cover
-      if (editCurrentStories.length > 0) {
-        const coverUrl = editCurrentStories[0].media_url || editCurrentStories[0].thumbnail_url;
-        if (coverUrl) {
-          updateData.cover_image_url = coverUrl;
+      let newCoverUrl = null;
+
+      // If user picked a custom cover image, upload via FormData
+      if (editCoverImageUri) {
+        const uploadRes = await apiService.updateHighlightWithCover(editingHighlight.id, editCoverImageUri, { title: editTitle.trim() });
+        const resData = uploadRes?.data || uploadRes;
+        newCoverUrl = resData?.highlight?.cover_image_url || resData?.cover_image_url || editCoverImageUri;
+        console.log('📌 [HighlightsBar] Cover image uploaded, new URL:', newCoverUrl);
+      } else {
+        // No custom cover - send regular JSON update
+        const updateData = { title: editTitle.trim() };
+
+        // If there are current stories, use the first one as cover
+        if (editCurrentStories.length > 0) {
+          const coverUrl = editCurrentStories[0].media_url || editCurrentStories[0].thumbnail_url;
+          if (coverUrl) {
+            updateData.cover_image_url = coverUrl;
+          }
         }
-      }
 
-      await apiService.updateHighlight(editingHighlight.id, updateData);
+        await apiService.updateHighlight(editingHighlight.id, updateData);
+        newCoverUrl = updateData.cover_image_url;
+      }
 
       // Update local state
       setHighlights(prev =>
         prev.map(h =>
           h.id === editingHighlight.id
-            ? { ...h, title: editTitle.trim(), name: editTitle.trim(), cover_image_url: updateData.cover_image_url || h.cover_image_url }
+            ? { ...h, title: editTitle.trim(), name: editTitle.trim(), cover_image_url: newCoverUrl || h.cover_image_url, cover_url: newCoverUrl || h.cover_url }
             : h
         )
       );
 
       setShowEditModal(false);
+      setEditCoverImageUri(null);
       Alert.alert('Berhasil', 'Highlight berhasil diperbarui!');
       loadHighlights(false);
     } catch (error) {
@@ -675,6 +759,32 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
               />
             </View>
 
+            {/* Cover Image Picker */}
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Cover Image (opsional)</Text>
+              <TouchableOpacity
+                style={[styles.coverPickerButton, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]}
+                onPress={() => pickCoverImage('create')}
+              >
+                {createCoverImageUri ? (
+                  <Image source={{ uri: createCoverImageUri }} style={styles.coverPickerPreview} resizeMode="cover" />
+                ) : (
+                  <View style={styles.coverPickerPlaceholder}>
+                    <Ionicons name="camera" size={28} color={colors.iconInactive} />
+                    <Text style={[styles.coverPickerText, { color: colors.iconInactive }]}>Pilih cover</Text>
+                  </View>
+                )}
+                {createCoverImageUri && (
+                  <TouchableOpacity
+                    style={styles.coverPickerRemove}
+                    onPress={() => setCreateCoverImageUri(null)}
+                  >
+                    <Ionicons name="close-circle" size={22} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
               style={[
                 styles.submitButton,
@@ -854,6 +964,37 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
                 placeholderTextColor={colors.iconInactive}
                 maxLength={30}
               />
+            </View>
+
+            {/* Cover Image Picker */}
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Cover Image</Text>
+              <TouchableOpacity
+                style={[styles.coverPickerButton, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]}
+                onPress={() => pickCoverImage('edit')}
+              >
+                {editCoverImageUri ? (
+                  <Image source={{ uri: editCoverImageUri }} style={styles.coverPickerPreview} resizeMode="cover" />
+                ) : (editingHighlight?.cover_image_url || editingHighlight?.cover_url) ? (
+                  <Image source={{ uri: editingHighlight.cover_image_url || editingHighlight.cover_url }} style={styles.coverPickerPreview} resizeMode="cover" />
+                ) : (
+                  <View style={styles.coverPickerPlaceholder}>
+                    <Ionicons name="camera" size={28} color={colors.iconInactive} />
+                    <Text style={[styles.coverPickerText, { color: colors.iconInactive }]}>Pilih cover</Text>
+                  </View>
+                )}
+                <View style={styles.coverPickerOverlayButton}>
+                  <Ionicons name="camera" size={16} color="#FFFFFF" />
+                </View>
+                {editCoverImageUri && (
+                  <TouchableOpacity
+                    style={styles.coverPickerRemove}
+                    onPress={() => setEditCoverImageUri(null)}
+                  >
+                    <Ionicons name="close-circle" size={22} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Current Stories */}
@@ -1244,6 +1385,44 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 8,
     padding: 3,
+  },
+  coverPickerButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  coverPickerPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPickerPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  coverPickerText: {
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  coverPickerRemove: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 11,
+  },
+  coverPickerOverlayButton: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 10,
+    padding: 4,
   },
 });
 
