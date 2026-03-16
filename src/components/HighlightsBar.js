@@ -44,6 +44,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
   const [isLoadingEditStories, setIsLoadingEditStories] = useState(false);
   const [createCoverImageUri, setCreateCoverImageUri] = useState(null);
   const [editCoverImageUri, setEditCoverImageUri] = useState(null);
+  const [editCoverFromStoryUrl, setEditCoverFromStoryUrl] = useState(null);
 
   useEffect(() => {
     loadHighlights();
@@ -203,23 +204,41 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
   };
 
   const pickCoverImage = async (mode = 'create') => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert('Izin Diperlukan', 'Izinkan akses ke galeri untuk memilih cover image');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      if (mode === 'create') {
-        setCreateCoverImageUri(result.assets[0].uri);
-      } else {
-        setEditCoverImageUri(result.assets[0].uri);
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permissionResult.granted === false) {
+        Alert.alert('Izin Diperlukan', 'Izinkan akses ke galeri untuk memilih cover image');
+        return;
       }
+
+      // Use MediaType enum if available, fallback to string
+      const mediaTypes = ImagePicker.MediaType
+        ? [ImagePicker.MediaType.Images]
+        : ImagePicker.MediaTypeOptions
+          ? ImagePicker.MediaTypeOptions.Images
+          : ['images'];
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      console.log('📌 [HighlightsBar] ImagePicker result:', JSON.stringify({ canceled: result.canceled, assets: result.assets?.length }));
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        if (mode === 'create') {
+          setCreateCoverImageUri(uri);
+        } else {
+          setEditCoverImageUri(uri);
+          setEditCoverFromStoryUrl(null); // gallery pick overrides story pick
+        }
+      }
+    } catch (error) {
+      console.error('📌 [HighlightsBar] ImagePicker error:', error);
+      Alert.alert('Error', 'Gagal membuka galeri. Coba lagi.');
     }
   };
 
@@ -479,6 +498,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
     const hl = editingHighlight;
     setEditTitle(hl.title || hl.name || '');
     setEditCoverImageUri(null);
+    setEditCoverFromStoryUrl(null);
     setShowEditModal(true);
 
     // Load current stories in this highlight
@@ -512,22 +532,24 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
 
       let newCoverUrl = null;
 
-      // If user picked a custom cover image, upload via FormData
       if (editCoverImageUri) {
+        // Priority 1: User picked a NEW image from gallery — upload via FormData
+        console.log('📌 [HighlightsBar] Uploading custom cover image from gallery...');
         const uploadRes = await apiService.updateHighlightWithCover(editingHighlight.id, editCoverImageUri, { title: editTitle.trim() });
         const resData = uploadRes?.data || uploadRes;
         newCoverUrl = resData?.highlight?.cover_image_url || resData?.cover_image_url || editCoverImageUri;
         console.log('📌 [HighlightsBar] Cover image uploaded, new URL:', newCoverUrl);
       } else {
-        // No custom cover - send regular JSON update
+        // Regular JSON update (no file upload needed)
         const updateData = { title: editTitle.trim() };
 
-        // If there are current stories, use the first one as cover
-        if (editCurrentStories.length > 0) {
-          const coverUrl = editCurrentStories[0].media_url || editCurrentStories[0].thumbnail_url;
-          if (coverUrl) {
-            updateData.cover_image_url = coverUrl;
-          }
+        if (editCoverFromStoryUrl) {
+          // Priority 2: User tapped "set as cover" on a story
+          updateData.cover_image_url = editCoverFromStoryUrl;
+          console.log('📌 [HighlightsBar] Using story cover URL:', editCoverFromStoryUrl);
+        } else if (editingHighlight?.cover_image_url || editingHighlight?.cover_url) {
+          // Priority 3: Keep existing cover (don't override with story[0])
+          updateData.cover_image_url = editingHighlight.cover_image_url || editingHighlight.cover_url;
         }
 
         await apiService.updateHighlight(editingHighlight.id, updateData);
@@ -545,6 +567,7 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
 
       setShowEditModal(false);
       setEditCoverImageUri(null);
+      setEditCoverFromStoryUrl(null);
       Alert.alert('Berhasil', 'Highlight berhasil diperbarui!');
       loadHighlights(false);
     } catch (error) {
@@ -584,16 +607,12 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
   const handleSetCover = (story) => {
     const coverUrl = story.media_url || story.thumbnail_url;
     if (coverUrl) {
-      // Update local state immediately for feedback
-      setHighlights(prev =>
-        prev.map(h =>
-          h.id === editingHighlight.id
-            ? { ...h, cover_image_url: coverUrl, cover_url: coverUrl }
-            : h
-        )
-      );
+      // Track the chosen cover URL so handleSaveEdit sends it to the server
+      setEditCoverFromStoryUrl(coverUrl);
+      setEditCoverImageUri(null); // story pick overrides gallery pick
+      // Update local state immediately for visual feedback
       setEditingHighlight(prev => ({ ...prev, cover_image_url: coverUrl, cover_url: coverUrl }));
-      Alert.alert('Cover Diperbarui', 'Cover highlight akan disimpan saat Anda menekan Simpan');
+      Alert.alert('Cover Dipilih', 'Cover akan disimpan saat Anda menekan Simpan');
     }
   };
 
@@ -762,27 +781,38 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
             {/* Cover Image Picker */}
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Cover Image (opsional)</Text>
-              <TouchableOpacity
-                style={[styles.coverPickerButton, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]}
-                onPress={() => pickCoverImage('create')}
-              >
-                {createCoverImageUri ? (
-                  <Image source={{ uri: createCoverImageUri }} style={styles.coverPickerPreview} resizeMode="cover" />
-                ) : (
-                  <View style={styles.coverPickerPlaceholder}>
-                    <Ionicons name="camera" size={28} color={colors.iconInactive} />
-                    <Text style={[styles.coverPickerText, { color: colors.iconInactive }]}>Pilih cover</Text>
-                  </View>
-                )}
-                {createCoverImageUri && (
+              <View style={styles.coverEditRow}>
+                <View style={[styles.coverEditPreviewBox, { borderColor: colors.border, backgroundColor: colors.backgroundTertiary }]}>
+                  {createCoverImageUri ? (
+                    <Image source={{ uri: createCoverImageUri }} style={styles.coverEditPreviewImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.coverPickerPlaceholder}>
+                      <Ionicons name="images" size={24} color={colors.iconInactive} />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.coverEditActions}>
                   <TouchableOpacity
-                    style={styles.coverPickerRemove}
-                    onPress={() => setCreateCoverImageUri(null)}
+                    style={[styles.coverEditButton, { backgroundColor: colors.primary }]}
+                    onPress={() => pickCoverImage('create')}
                   >
-                    <Ionicons name="close-circle" size={22} color="#EF4444" />
+                    <Ionicons name="image" size={18} color="#FFFFFF" />
+                    <Text style={styles.coverEditButtonText}>Pilih dari Galeri</Text>
                   </TouchableOpacity>
-                )}
-              </TouchableOpacity>
+                  {createCoverImageUri && (
+                    <TouchableOpacity
+                      style={[styles.coverEditButton, { backgroundColor: '#EF4444' }]}
+                      onPress={() => setCreateCoverImageUri(null)}
+                    >
+                      <Ionicons name="close" size={18} color="#FFFFFF" />
+                      <Text style={styles.coverEditButtonText}>Hapus Cover</Text>
+                    </TouchableOpacity>
+                  )}
+                  <Text style={[styles.coverEditHint, { color: colors.textTertiary }]}>
+                    Jika kosong, story pertama akan jadi cover
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -966,35 +996,50 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
               />
             </View>
 
-            {/* Cover Image Picker */}
+            {/* Cover Image Section */}
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Cover Image</Text>
-              <TouchableOpacity
-                style={[styles.coverPickerButton, { backgroundColor: colors.backgroundTertiary, borderColor: colors.border }]}
-                onPress={() => pickCoverImage('edit')}
-              >
-                {editCoverImageUri ? (
-                  <Image source={{ uri: editCoverImageUri }} style={styles.coverPickerPreview} resizeMode="cover" />
-                ) : (editingHighlight?.cover_image_url || editingHighlight?.cover_url) ? (
-                  <Image source={{ uri: editingHighlight.cover_image_url || editingHighlight.cover_url }} style={styles.coverPickerPreview} resizeMode="cover" />
-                ) : (
-                  <View style={styles.coverPickerPlaceholder}>
-                    <Ionicons name="camera" size={28} color={colors.iconInactive} />
-                    <Text style={[styles.coverPickerText, { color: colors.iconInactive }]}>Pilih cover</Text>
-                  </View>
-                )}
-                <View style={styles.coverPickerOverlayButton}>
-                  <Ionicons name="camera" size={16} color="#FFFFFF" />
+              <View style={styles.coverEditRow}>
+                {/* Current/New Cover Preview */}
+                <View style={[styles.coverEditPreviewBox, { borderColor: colors.border, backgroundColor: colors.backgroundTertiary }]}>
+                  {editCoverImageUri ? (
+                    <Image source={{ uri: editCoverImageUri }} style={styles.coverEditPreviewImage} resizeMode="cover" />
+                  ) : (editCoverFromStoryUrl) ? (
+                    <Image source={{ uri: editCoverFromStoryUrl }} style={styles.coverEditPreviewImage} resizeMode="cover" />
+                  ) : (editingHighlight?.cover_image_url || editingHighlight?.cover_url) ? (
+                    <Image source={{ uri: editingHighlight.cover_image_url || editingHighlight.cover_url }} style={styles.coverEditPreviewImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.coverPickerPlaceholder}>
+                      <Ionicons name="images" size={24} color={colors.iconInactive} />
+                    </View>
+                  )}
                 </View>
-                {editCoverImageUri && (
+                {/* Action Buttons */}
+                <View style={styles.coverEditActions}>
                   <TouchableOpacity
-                    style={styles.coverPickerRemove}
-                    onPress={() => setEditCoverImageUri(null)}
+                    style={[styles.coverEditButton, { backgroundColor: colors.primary }]}
+                    onPress={() => pickCoverImage('edit')}
                   >
-                    <Ionicons name="close-circle" size={22} color="#EF4444" />
+                    <Ionicons name="image" size={18} color="#FFFFFF" />
+                    <Text style={styles.coverEditButtonText}>Pilih dari Galeri</Text>
                   </TouchableOpacity>
-                )}
-              </TouchableOpacity>
+                  {(editCoverImageUri || editCoverFromStoryUrl) && (
+                    <TouchableOpacity
+                      style={[styles.coverEditButton, { backgroundColor: '#EF4444' }]}
+                      onPress={() => {
+                        setEditCoverImageUri(null);
+                        setEditCoverFromStoryUrl(null);
+                      }}
+                    >
+                      <Ionicons name="close" size={18} color="#FFFFFF" />
+                      <Text style={styles.coverEditButtonText}>Reset Cover</Text>
+                    </TouchableOpacity>
+                  )}
+                  <Text style={[styles.coverEditHint, { color: colors.textTertiary }]}>
+                    Atau tap ikon gambar pada story di bawah
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Current Stories */}
@@ -1020,29 +1065,38 @@ const HighlightsBar = ({ userId, isOwnProfile = false, onHighlightPress }) => {
                   keyExtractor={(item) => item.id.toString()}
                   style={{ marginTop: 8 }}
                   showsHorizontalScrollIndicator={false}
-                  renderItem={({ item }) => (
-                    <View style={styles.editStoryItem}>
-                      <Image
-                        source={{ uri: item.media_url || item.thumbnail_url }}
-                        style={styles.editStoryThumb}
-                        resizeMode="cover"
-                      />
-                      {/* Set as cover button */}
-                      <TouchableOpacity
-                        style={styles.setCoverButton}
-                        onPress={() => handleSetCover(item)}
-                      >
-                        <Ionicons name="image" size={14} color="#FFFFFF" />
-                      </TouchableOpacity>
-                      {/* Remove button */}
-                      <TouchableOpacity
-                        style={styles.removeStoryButton}
-                        onPress={() => handleRemoveStoryFromHighlight(item.id)}
-                      >
-                        <Ionicons name="close-circle" size={20} color="#EF4444" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                  renderItem={({ item }) => {
+                    const storyUrl = item.media_url || item.thumbnail_url;
+                    const isSelectedCover = editCoverFromStoryUrl && editCoverFromStoryUrl === storyUrl;
+                    return (
+                      <View style={[styles.editStoryItem, isSelectedCover && { borderWidth: 2, borderColor: colors.primary }]}>
+                        <Image
+                          source={{ uri: storyUrl }}
+                          style={styles.editStoryThumb}
+                          resizeMode="cover"
+                        />
+                        {/* Set as cover button */}
+                        <TouchableOpacity
+                          style={[styles.setCoverButton, isSelectedCover && { backgroundColor: colors.primary }]}
+                          onPress={() => handleSetCover(item)}
+                        >
+                          <Ionicons name="image" size={14} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        {isSelectedCover && (
+                          <View style={styles.coverBadge}>
+                            <Text style={styles.coverBadgeText}>Cover</Text>
+                          </View>
+                        )}
+                        {/* Remove button */}
+                        <TouchableOpacity
+                          style={styles.removeStoryButton}
+                          onPress={() => handleRemoveStoryFromHighlight(item.id)}
+                        >
+                          <Ionicons name="close-circle" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }}
                 />
               ) : (
                 <Text style={[{ color: colors.textTertiary, fontSize: 13, marginTop: 8 }]}>
@@ -1386,16 +1440,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 3,
   },
-  coverPickerButton: {
+  coverBadge: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    backgroundColor: 'rgba(6,64,43,0.85)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  coverBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  coverEditRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 8,
+  },
+  coverEditPreviewBox: {
     width: 80,
     height: 80,
     borderRadius: 12,
     borderWidth: 1,
-    borderStyle: 'dashed',
     overflow: 'hidden',
-    marginTop: 8,
   },
-  coverPickerPreview: {
+  coverEditPreviewImage: {
     width: '100%',
     height: '100%',
   },
@@ -1403,26 +1475,28 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
   },
-  coverPickerText: {
-    fontSize: 11,
-    textAlign: 'center',
+  coverEditActions: {
+    flex: 1,
+    gap: 8,
   },
-  coverPickerRemove: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 11,
-  },
-  coverPickerOverlayButton: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  coverEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 10,
-    padding: 4,
+  },
+  coverEditButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  coverEditHint: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 });
 
