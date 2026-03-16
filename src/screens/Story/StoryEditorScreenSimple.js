@@ -119,6 +119,7 @@ const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeigh
             {
               color: element.color,
               fontSize: element.size,
+              textAlign: element.align || 'center',
               ...getFontStyle(element.font),
             },
           ]}
@@ -331,6 +332,7 @@ const StoryEditorScreenSimple = ({ route }) => {
   const [selectedBgColor, setSelectedBgColor] = useState('transparent');
   const [selectedFont, setSelectedFont] = useState('default');
   const [textSize, setTextSize] = useState(28);
+  const [textAlign, setTextAlign] = useState('center');
   const [textElements, setTextElements] = useState([]);
   const [editingElementId, setEditingElementId] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -391,7 +393,7 @@ const StoryEditorScreenSimple = ({ route }) => {
       // Update existing element
       setTextElements(prev => prev.map(el =>
         el.id === editingElementId
-          ? { ...el, text: textInput.trim(), color: selectedColor, bgColor: selectedBgColor, font: selectedFont, size: textSize }
+          ? { ...el, text: textInput.trim(), color: selectedColor, bgColor: selectedBgColor, font: selectedFont, size: textSize, align: textAlign }
           : el
       ));
     } else {
@@ -404,6 +406,7 @@ const StoryEditorScreenSimple = ({ route }) => {
         bgColor: selectedBgColor,
         font: selectedFont,
         size: textSize,
+        align: textAlign,
         scale: 1,
         x: SCREEN_WIDTH / 2 - 100,
         y: SCREEN_HEIGHT / 3 + offset,
@@ -424,6 +427,7 @@ const StoryEditorScreenSimple = ({ route }) => {
     setSelectedBgColor('transparent');
     setSelectedFont('default');
     setTextSize(28);
+    setTextAlign('center');
     setShowTextModal(true);
   };
 
@@ -435,6 +439,7 @@ const StoryEditorScreenSimple = ({ route }) => {
     setSelectedBgColor(element.bgColor || 'transparent');
     setSelectedFont(element.font);
     setTextSize(element.size);
+    setTextAlign(element.align || 'center');
     setShowTextModal(true);
   };
 
@@ -595,6 +600,7 @@ const StoryEditorScreenSimple = ({ route }) => {
           bgColor: el.bgColor,
           font: el.font,
           size: el.size,
+          align: el.align || 'center',
           xPercent: Math.max(0, Math.min(100, (finalX / SCREEN_WIDTH) * 100)),
           yPercent: Math.max(0, Math.min(100, (finalY / SCREEN_HEIGHT) * 100)),
           scale: finalScale,
@@ -886,6 +892,8 @@ const StoryEditorScreenSimple = ({ route }) => {
                     {
                       color: selectedColor,
                       fontSize: textSize,
+                      textAlign: textAlign,
+                      width: '100%',
                       ...getFontStyle(selectedFont),
                     },
                   ]}
@@ -934,6 +942,53 @@ const StoryEditorScreenSimple = ({ route }) => {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+
+              {/* Text Alignment */}
+              <Text style={styles.sectionLabel}>Perataan Teks</Text>
+              <View style={styles.alignmentRow}>
+                {[
+                  { id: 'left', icon: 'reorder-three-outline', label: 'Kiri' },
+                  { id: 'center', icon: 'reorder-three-outline', label: 'Tengah' },
+                  { id: 'right', icon: 'reorder-three-outline', label: 'Kanan' },
+                ].map((align) => (
+                  <TouchableOpacity
+                    key={align.id}
+                    style={[
+                      styles.alignmentButton,
+                      textAlign === align.id && styles.alignmentButtonSelected,
+                    ]}
+                    onPress={() => setTextAlign(align.id)}
+                  >
+                    <View style={styles.alignmentIconBox}>
+                      {align.id === 'left' && (
+                        <>
+                          <View style={[styles.alignLine, { width: '100%' }]} />
+                          <View style={[styles.alignLine, { width: '70%', alignSelf: 'flex-start' }]} />
+                          <View style={[styles.alignLine, { width: '85%', alignSelf: 'flex-start' }]} />
+                        </>
+                      )}
+                      {align.id === 'center' && (
+                        <>
+                          <View style={[styles.alignLine, { width: '100%' }]} />
+                          <View style={[styles.alignLine, { width: '70%', alignSelf: 'center' }]} />
+                          <View style={[styles.alignLine, { width: '85%', alignSelf: 'center' }]} />
+                        </>
+                      )}
+                      {align.id === 'right' && (
+                        <>
+                          <View style={[styles.alignLine, { width: '100%' }]} />
+                          <View style={[styles.alignLine, { width: '70%', alignSelf: 'flex-end' }]} />
+                          <View style={[styles.alignLine, { width: '85%', alignSelf: 'flex-end' }]} />
+                        </>
+                      )}
+                    </View>
+                    <Text style={[
+                      styles.alignmentLabel,
+                      textAlign === align.id && styles.alignmentLabelSelected,
+                    ]}>{align.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               {/* Text Color Palette */}
               <Text style={styles.sectionLabel}>Warna Teks</Text>
@@ -1363,10 +1418,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
+    minWidth: 120,
     maxWidth: 300,
   },
   textPreviewText: {
-    textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 4,
@@ -1471,11 +1526,9 @@ const styles = StyleSheet.create({
     padding: 20,
     minHeight: 80,
     justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 16,
   },
   previewText: {
-    textAlign: 'center',
   },
   textInput: {
     backgroundColor: '#F3F4F6',
@@ -1548,6 +1601,45 @@ const styles = StyleSheet.create({
   sizeSlider: {
     width: '100%',
     height: 40,
+  },
+  alignmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  alignmentButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  alignmentButtonSelected: {
+    backgroundColor: '#D1FAE5',
+    borderColor: '#10B981',
+  },
+  alignmentIconBox: {
+    width: 32,
+    height: 20,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  alignLine: {
+    height: 2,
+    backgroundColor: '#6B7280',
+    borderRadius: 1,
+  },
+  alignmentLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  alignmentLabelSelected: {
+    color: '#10B981',
   },
   // Sticker Panel Styles
   stickerPanelOverlay: {
