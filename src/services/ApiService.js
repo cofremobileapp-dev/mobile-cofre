@@ -160,18 +160,27 @@ class ApiService {
     console.log('📤 [API] Full URL:', `${API_BASE_URL}${url}`);
     console.log('📤 [API] Auth token present:', !!this.authToken);
 
-    // Log FormData contents for debugging
-    if (formData._parts) {
-      console.log('📤 [API] FormData contents:');
-      formData._parts.forEach((part, index) => {
-        const [key, value] = part;
-        if (typeof value === 'object' && value.uri) {
-          console.log(`  [${index}] ${key}: FILE(uri=${value.uri?.substring(0, 80)}, name=${value.name}, type=${value.type})`);
-        } else {
-          const displayValue = typeof value === 'string' ? value.substring(0, 100) : typeof value;
-          console.log(`  [${index}] ${key}: ${displayValue}`);
-        }
-      });
+    // Log FormData contents for debugging (safely)
+    try {
+      if (formData._parts && Array.isArray(formData._parts)) {
+        console.log('📤 [API] FormData parts count:', formData._parts.length);
+        formData._parts.forEach((part, index) => {
+          try {
+            const [key, value] = part;
+            if (typeof value === 'object' && value && value.uri) {
+              console.log(`  [${index}] ${key}: FILE(name=${value.name}, type=${value.type})`);
+            } else if (typeof value === 'string') {
+              console.log(`  [${index}] ${key}: string(${value.length} chars)`);
+            } else {
+              console.log(`  [${index}] ${key}: ${typeof value}`);
+            }
+          } catch (partErr) {
+            console.log(`  [${index}] (error reading part)`);
+          }
+        });
+      }
+    } catch (logErr) {
+      console.log('📤 [API] Could not log FormData contents');
     }
 
     // Build headers - DO NOT set Content-Type for multipart/form-data

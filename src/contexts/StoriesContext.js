@@ -110,7 +110,10 @@ export const StoriesProvider = ({ children }) => {
       console.log('📤 [Stories] Starting story upload:', {
         mediaUri: mediaUri?.substring(0, 80),
         mediaType,
-        options: { ...options, text_elements: options.text_elements ? 'present' : 'none' },
+        hasTextElements: !!options.text_elements,
+        hasStickers: !!options.stickers,
+        stickerCount: Array.isArray(options.stickers) ? options.stickers.length : 0,
+        hasFilter: !!options.filter,
       });
 
       if (!mediaUri) {
@@ -133,25 +136,29 @@ export const StoriesProvider = ({ children }) => {
       if (options.caption) formData.append('caption', options.caption);
 
       // Handle stickers: upload image sticker files alongside the main media
-      if (options.stickers && Array.isArray(options.stickers)) {
-        let stickerImageIndex = 0;
-        const stickersMeta = options.stickers.map((sticker) => {
-          if (sticker.type === 'image' && sticker.data?.imageUri && sticker.data.imageUri.startsWith('file://')) {
-            const idx = stickerImageIndex++;
-            const stickerMime = getMimeType(sticker.data.imageUri, 'image');
-            formData.append(`sticker_images[${idx}]`, {
-              uri: sticker.data.imageUri,
-              type: stickerMime.mimeType,
-              name: `sticker_${Date.now()}_${idx}.${stickerMime.extension}`,
-            });
-            console.log('📤 [Stories] Adding image sticker file:', idx);
-            return { ...sticker, data: { ...sticker.data, imageUri: `__STICKER_IMAGE_${idx}__` } };
-          }
-          return sticker;
-        });
-        formData.append('stickers', JSON.stringify(stickersMeta));
-      } else if (options.stickers) {
-        formData.append('stickers', JSON.stringify(options.stickers));
+      if (options.stickers && Array.isArray(options.stickers) && options.stickers.length > 0) {
+        try {
+          let stickerImageIndex = 0;
+          const stickersMeta = options.stickers.map((sticker) => {
+            if (sticker.type === 'image' && sticker.data?.imageUri && typeof sticker.data.imageUri === 'string' && sticker.data.imageUri.startsWith('file://')) {
+              const idx = stickerImageIndex++;
+              const stickerMime = getMimeType(sticker.data.imageUri, 'image');
+              formData.append(`sticker_images[${idx}]`, {
+                uri: sticker.data.imageUri,
+                type: stickerMime.mimeType,
+                name: `sticker_${Date.now()}_${idx}.${stickerMime.extension}`,
+              });
+              console.log('📤 [Stories] Adding image sticker file:', idx);
+              return { ...sticker, data: { ...sticker.data, imageUri: `__STICKER_IMAGE_${idx}__` } };
+            }
+            return sticker;
+          });
+          const stickersJson = JSON.stringify(stickersMeta);
+          console.log('📤 [Stories] Stickers JSON length:', stickersJson.length);
+          formData.append('stickers', stickersJson);
+        } catch (stickerErr) {
+          console.error('📤 [Stories] Error serializing stickers, skipping:', stickerErr.message);
+        }
       }
 
       if (options.text_elements) formData.append('text_elements', options.text_elements);
@@ -164,18 +171,24 @@ export const StoriesProvider = ({ children }) => {
 
       const response = await apiService.uploadStory(formData);
 
+      const responseData = response?.data;
       console.log('📤 [Stories] Upload response:', {
-        success: response.data?.success,
-        storyId: response.data?.story?.id,
+        success: responseData?.success,
+        storyId: responseData?.story?.id,
+        hasData: !!responseData,
       });
 
-      if (response.data.success) {
-        // Refresh stories - this updates the shared context state
-        await fetchStories();
-        await fetchMyStories();
-        return response.data.story;
+      if (responseData?.success) {
+        // Refresh stories in background - don't let this block or crash
+        try {
+          await fetchStories();
+          await fetchMyStories();
+        } catch (refreshErr) {
+          console.warn('📤 [Stories] Story refresh after upload failed (non-fatal):', refreshErr.message);
+        }
+        return responseData.story;
       } else {
-        throw new Error(response.data?.message || 'Upload failed');
+        throw new Error(responseData?.message || 'Upload failed');
       }
     } catch (err) {
       console.error('❌ [Stories] Error uploading story:', err);

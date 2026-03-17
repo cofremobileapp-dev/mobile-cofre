@@ -79,10 +79,7 @@ const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeigh
           if (Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3) {
             hasMoved.current = true;
           }
-          Animated.event(
-            [null, { dx: pan.x, dy: pan.y }],
-            { useNativeDriver: false }
-          )(evt, gestureState);
+          pan.setValue({ x: gestureState.dx, y: gestureState.dy });
         }
       },
       onPanResponderRelease: (_, gestureState) => {
@@ -265,10 +262,7 @@ const DraggableStickerItem = ({ sticker, onDelete, screenWidth, screenHeight }) 
           if (Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3) {
             hasMoved.current = true;
           }
-          Animated.event(
-            [null, { dx: pan.x, dy: pan.y }],
-            { useNativeDriver: false }
-          )(evt, gestureState);
+          pan.setValue({ x: gestureState.dx, y: gestureState.dy });
         }
       },
       onPanResponderRelease: () => {
@@ -597,92 +591,106 @@ const StoryEditorScreenSimple = ({ route }) => {
   const handlePost = async () => {
     try {
       setIsUploading(true);
+      console.log('📌 [StoryEditor] handlePost started');
 
-      // Prepare text elements data from all elements
-      const textElementsData = textElements.map(el => {
-        // Get final position from the external refs map (safe, no Animated internals)
-        const refs = elementRefsMap[el.id];
-        let finalX = el.x;
-        let finalY = el.y;
-        let finalScale = el.scale || 1;
+      // Prepare text elements - pure data only, no refs
+      let textElementsData = [];
+      try {
+        textElementsData = textElements.map(el => {
+          const refs = elementRefsMap[el.id];
+          const pos = refs?.posRef?.current;
+          const finalX = pos ? pos.x : el.x;
+          const finalY = pos ? pos.y : el.y;
+          const finalScale = refs?.scaleRef?.current || el.scale || 1;
 
-        if (refs) {
-          try {
-            const pos = refs.posRef?.current;
-            if (pos) {
-              finalX = pos.x;
-              finalY = pos.y;
-            }
-            if (refs.scaleRef?.current) {
-              finalScale = refs.scaleRef.current;
-            }
-          } catch (e) {
-            console.warn('📌 [StoryEditor] Error reading text element refs:', e.message);
-          }
+          return {
+            text: String(el.text || ''),
+            color: String(el.color || '#FFFFFF'),
+            bgColor: String(el.bgColor || 'transparent'),
+            font: String(el.font || 'default'),
+            size: Number(el.size) || 28,
+            align: String(el.align || 'center'),
+            xPercent: Math.max(0, Math.min(100, (finalX / SCREEN_WIDTH) * 100)),
+            yPercent: Math.max(0, Math.min(100, (finalY / SCREEN_HEIGHT) * 100)),
+            scale: Number(finalScale) || 1,
+          };
+        });
+        console.log('📌 [StoryEditor] Text elements prepared:', textElementsData.length);
+      } catch (e) {
+        console.error('📌 [StoryEditor] Error preparing text elements:', e);
+        textElementsData = [];
+      }
+
+      // Prepare sticker elements - pure data only, no refs
+      let stickerElementsData = [];
+      try {
+        stickerElementsData = stickerElements.map(s => {
+          const refs = elementRefsMap[`sticker_${s.id}`];
+          const pos = refs?.posRef?.current;
+          const finalX = pos ? pos.x : s.x;
+          const finalY = pos ? pos.y : s.y;
+          const finalScale = refs?.scaleRef?.current || s.scale || 1;
+
+          // Deep clone data to avoid any reference issues
+          const cleanData = JSON.parse(JSON.stringify(s.data || {}));
+
+          return {
+            type: String(s.type),
+            data: cleanData,
+            xPercent: Math.max(0, Math.min(100, (finalX / SCREEN_WIDTH) * 100)),
+            yPercent: Math.max(0, Math.min(100, (finalY / SCREEN_HEIGHT) * 100)),
+            scale: Number(finalScale) || 1,
+          };
+        });
+        console.log('📌 [StoryEditor] Sticker elements prepared:', stickerElementsData.length);
+      } catch (e) {
+        console.error('📌 [StoryEditor] Error preparing sticker elements:', e);
+        stickerElementsData = [];
+      }
+
+      // Validate serialization before upload
+      let textJson = null;
+      let stickersPayload = null;
+      try {
+        if (textElementsData.length > 0) {
+          textJson = JSON.stringify(textElementsData);
+          console.log('📌 [StoryEditor] Text JSON length:', textJson.length);
         }
-
-        return {
-          text: el.text,
-          color: el.color,
-          bgColor: el.bgColor,
-          font: el.font,
-          size: el.size,
-          align: el.align || 'center',
-          xPercent: Math.max(0, Math.min(100, (finalX / SCREEN_WIDTH) * 100)),
-          yPercent: Math.max(0, Math.min(100, (finalY / SCREEN_HEIGHT) * 100)),
-          scale: finalScale,
-        };
-      });
-
-      // Prepare sticker elements data
-      const stickerElementsData = stickerElements.map(s => {
-        const refs = elementRefsMap[`sticker_${s.id}`];
-        let finalX = s.x;
-        let finalY = s.y;
-        let finalScale = s.scale || 1;
-
-        if (refs) {
-          try {
-            const pos = refs.posRef?.current;
-            if (pos) {
-              finalX = pos.x;
-              finalY = pos.y;
-            }
-            if (refs.scaleRef?.current) {
-              finalScale = refs.scaleRef.current;
-            }
-          } catch (e) {
-            console.warn('📌 [StoryEditor] Error reading sticker refs:', e.message);
-          }
+        if (stickerElementsData.length > 0) {
+          // Test serialization first
+          JSON.stringify(stickerElementsData);
+          stickersPayload = stickerElementsData;
+          console.log('📌 [StoryEditor] Stickers serializable, count:', stickersPayload.length);
         }
+      } catch (e) {
+        console.error('📌 [StoryEditor] Serialization error:', e);
+        // If serialization fails, upload without text/stickers rather than crash
+        textJson = null;
+        stickersPayload = null;
+      }
 
-        return {
-          type: s.type,
-          data: s.data,
-          xPercent: Math.max(0, Math.min(100, (finalX / SCREEN_WIDTH) * 100)),
-          yPercent: Math.max(0, Math.min(100, (finalY / SCREEN_HEIGHT) * 100)),
-          scale: finalScale,
-        };
-      });
-
+      console.log('📌 [StoryEditor] Calling uploadStory...');
       await uploadStory(mediaUri, mediaType, {
         caption: null,
         duration: mediaType === 'video' ? 15 : 5,
-        text_elements: textElementsData.length > 0 ? JSON.stringify(textElementsData) : null,
-        stickers: stickerElementsData.length > 0 ? stickerElementsData : null,
+        text_elements: textJson,
+        stickers: stickersPayload,
         filter: selectedFilter !== 'normal' ? selectedFilter : null,
       });
 
+      console.log('📌 [StoryEditor] Upload complete, navigating back...');
       // Success - navigate back to home
       navigation.popToTop();
     } catch (error) {
-      console.error('Error posting story:', error);
+      console.error('📌 [StoryEditor] Error posting story:', error?.message || error);
 
       let errorMessage = 'Gagal memposting story. Silakan coba lagi.';
-      if (error.response?.status === 413) {
+      if (error?.response?.status === 413) {
         errorMessage = 'File terlalu besar. Maksimal 50MB untuk video.';
-      } else if (error.response?.status === 401) {
+      } else if (error?.response?.status === 401) {
         errorMessage = 'Sesi Anda telah berakhir. Silakan login kembali.';
+      } else if (error?.message) {
+        errorMessage = `Error: ${error.message}`;
       }
 
       Alert.alert('Error', errorMessage);
