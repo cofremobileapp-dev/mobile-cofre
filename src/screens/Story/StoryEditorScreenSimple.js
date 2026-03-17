@@ -21,6 +21,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import useStories from '../../hooks/useStories';
 
+// Safe way to read current value from Animated.Value
+const getAnimatedValue = (animatedVal) => {
+  if (animatedVal && typeof animatedVal._value === 'number') return animatedVal._value;
+  if (animatedVal && typeof animatedVal.__getValue === 'function') return animatedVal.__getValue();
+  return 0;
+};
+
+// Registry to store refs outside of element objects (avoids serialization crashes)
+const elementRefsMap = {};
+
 // Draggable text item component - each text element gets its own drag/pinch handler
 const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeight, getFontStyle }) => {
   const pan = useRef(new Animated.ValueXY({ x: element.x, y: element.y })).current;
@@ -30,6 +40,10 @@ const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeigh
   const lastScaleRef = useRef(element.scale || 1);
   const touchStartTimeRef = useRef(0);
   const hasMoved = useRef(false);
+  const currentPosRef = useRef({ x: element.x, y: element.y });
+
+  // Store refs in external map instead of mutating the element object
+  elementRefsMap[element.id] = { panRef: pan, scaleRef: currentScaleRef, posRef: currentPosRef };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -38,10 +52,9 @@ const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeigh
       onPanResponderGrant: () => {
         touchStartTimeRef.current = Date.now();
         hasMoved.current = false;
-        pan.setOffset({
-          x: pan.x._value,
-          y: pan.y._value,
-        });
+        const curX = getAnimatedValue(pan.x);
+        const curY = getAnimatedValue(pan.y);
+        pan.setOffset({ x: curX, y: curY });
         pan.setValue({ x: 0, y: 0 });
       },
       onPanResponderMove: (evt, gestureState) => {
@@ -76,9 +89,11 @@ const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeigh
         pan.flattenOffset();
         lastScaleRef.current = currentScaleRef.current;
         lastDistanceRef.current = 0;
-        element._finalX = pan.x._value;
-        element._finalY = pan.y._value;
-        element._finalScale = currentScaleRef.current;
+        // Store final position in a plain ref (not on the element object)
+        currentPosRef.current = {
+          x: getAnimatedValue(pan.x),
+          y: getAnimatedValue(pan.y),
+        };
 
         // Detect tap: short duration + minimal movement
         const duration = Date.now() - touchStartTimeRef.current;
@@ -89,9 +104,6 @@ const DraggableTextItem = ({ element, onEdit, onDelete, screenWidth, screenHeigh
       },
     })
   ).current;
-
-  element._panRef = pan;
-  element._scaleRef = currentScaleRef;
 
   return (
     <Animated.View
@@ -215,6 +227,10 @@ const DraggableStickerItem = ({ sticker, onDelete, screenWidth, screenHeight }) 
   const lastDistanceRef = useRef(0);
   const lastScaleRef = useRef(sticker.scale || 1);
   const hasMoved = useRef(false);
+  const currentPosRef = useRef({ x: sticker.x, y: sticker.y });
+
+  // Store refs in external map instead of mutating the sticker object
+  elementRefsMap[`sticker_${sticker.id}`] = { panRef: pan, scaleRef: currentScaleRef, posRef: currentPosRef };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -222,10 +238,9 @@ const DraggableStickerItem = ({ sticker, onDelete, screenWidth, screenHeight }) 
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 3 || Math.abs(gs.dy) > 3,
       onPanResponderGrant: () => {
         hasMoved.current = false;
-        pan.setOffset({
-          x: pan.x._value,
-          y: pan.y._value,
-        });
+        const curX = getAnimatedValue(pan.x);
+        const curY = getAnimatedValue(pan.y);
+        pan.setOffset({ x: curX, y: curY });
         pan.setValue({ x: 0, y: 0 });
       },
       onPanResponderMove: (evt, gestureState) => {
@@ -260,15 +275,13 @@ const DraggableStickerItem = ({ sticker, onDelete, screenWidth, screenHeight }) 
         pan.flattenOffset();
         lastScaleRef.current = currentScaleRef.current;
         lastDistanceRef.current = 0;
-        sticker._finalX = pan.x._value;
-        sticker._finalY = pan.y._value;
-        sticker._finalScale = currentScaleRef.current;
+        currentPosRef.current = {
+          x: getAnimatedValue(pan.x),
+          y: getAnimatedValue(pan.y),
+        };
       },
     })
   ).current;
-
-  sticker._panRef = pan;
-  sticker._scaleRef = currentScaleRef;
 
   return (
     <Animated.View
@@ -587,12 +600,26 @@ const StoryEditorScreenSimple = ({ route }) => {
 
       // Prepare text elements data from all elements
       const textElementsData = textElements.map(el => {
-        // Get final position from the pan ref or stored values
-        const panRef = el._panRef;
-        const scaleRef = el._scaleRef;
-        const finalX = panRef ? (panRef.x._value + (panRef.x._offset || 0)) : el.x;
-        const finalY = panRef ? (panRef.y._value + (panRef.y._offset || 0)) : el.y;
-        const finalScale = scaleRef ? scaleRef.current : (el.scale || 1);
+        // Get final position from the external refs map (safe, no Animated internals)
+        const refs = elementRefsMap[el.id];
+        let finalX = el.x;
+        let finalY = el.y;
+        let finalScale = el.scale || 1;
+
+        if (refs) {
+          try {
+            const pos = refs.posRef?.current;
+            if (pos) {
+              finalX = pos.x;
+              finalY = pos.y;
+            }
+            if (refs.scaleRef?.current) {
+              finalScale = refs.scaleRef.current;
+            }
+          } catch (e) {
+            console.warn('📌 [StoryEditor] Error reading text element refs:', e.message);
+          }
+        }
 
         return {
           text: el.text,
@@ -609,11 +636,25 @@ const StoryEditorScreenSimple = ({ route }) => {
 
       // Prepare sticker elements data
       const stickerElementsData = stickerElements.map(s => {
-        const panRef = s._panRef;
-        const scaleRef = s._scaleRef;
-        const finalX = panRef ? (panRef.x._value + (panRef.x._offset || 0)) : s.x;
-        const finalY = panRef ? (panRef.y._value + (panRef.y._offset || 0)) : s.y;
-        const finalScale = scaleRef ? scaleRef.current : (s.scale || 1);
+        const refs = elementRefsMap[`sticker_${s.id}`];
+        let finalX = s.x;
+        let finalY = s.y;
+        let finalScale = s.scale || 1;
+
+        if (refs) {
+          try {
+            const pos = refs.posRef?.current;
+            if (pos) {
+              finalX = pos.x;
+              finalY = pos.y;
+            }
+            if (refs.scaleRef?.current) {
+              finalScale = refs.scaleRef.current;
+            }
+          } catch (e) {
+            console.warn('📌 [StoryEditor] Error reading sticker refs:', e.message);
+          }
+        }
 
         return {
           type: s.type,
