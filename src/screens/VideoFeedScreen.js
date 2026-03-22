@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   FlatList,
@@ -9,6 +9,7 @@ import {
   Text,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import VideoItem from '../components/VideoItem';
@@ -19,7 +20,14 @@ const VideoFeedScreen = ({ navigation, route }) => {
   const { videos: initialVideos, initialIndex = 0, title = 'Video' } = route.params || {};
   const { user } = useAuth();
   const { colors } = useTheme();
-  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
+
+  // For non-tab screens, we account for top inset but use full height for the bottom
+  const videoHeight = useMemo(() => {
+    return SCREEN_HEIGHT - insets.top;
+  }, [SCREEN_HEIGHT, insets.top]);
+
   const [videos, setVideos] = useState(initialVideos || []);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
@@ -58,8 +66,8 @@ const VideoFeedScreen = ({ navigation, route }) => {
   };
 
   const getItemLayout = (data, index) => ({
-    length: SCREEN_HEIGHT,
-    offset: SCREEN_HEIGHT * index,
+    length: videoHeight,
+    offset: videoHeight * index,
     index,
   });
 
@@ -73,6 +81,7 @@ const VideoFeedScreen = ({ navigation, route }) => {
       navigation={navigation}
       currentIndex={index}
       totalVideos={videos.length}
+      videoHeight={videoHeight}
     />
   );
 
@@ -117,7 +126,7 @@ const VideoFeedScreen = ({ navigation, route }) => {
         keyExtractor={(item) => item.id.toString()}
         pagingEnabled
         showsVerticalScrollIndicator={false}
-        snapToInterval={SCREEN_HEIGHT}
+        snapToInterval={videoHeight}
         snapToAlignment="start"
         decelerationRate="fast"
         onViewableItemsChanged={handleViewableItemsChanged}

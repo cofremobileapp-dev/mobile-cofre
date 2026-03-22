@@ -764,112 +764,129 @@ const StoryViewer = ({
               <ActivityIndicator size="large" color="#FFFFFF" />
             </View>
           )}
-          {currentStory.media_type === 'image' ? (
-            <Image
-              source={{ uri: currentStory.media_url }}
-              style={styles.media}
-              resizeMode="contain"
-              onLoadStart={() => {
-                console.log('🖼️ [StoryViewer] Image loading started:', currentStory.media_url);
-                setIsLoading(true);
-              }}
-              onLoadEnd={() => {
-                console.log('✅ [StoryViewer] Image loaded successfully');
-                setIsLoading(false);
-              }}
-              onError={(error) => {
-                console.error('❌ [StoryViewer] Image load error:', {
-                  error,
-                  url: currentStory.media_url,
-                });
-                setIsLoading(false);
-                Alert.alert('Error', 'Gagal memuat story. URL: ' + currentStory.media_url);
-              }}
-            />
-          ) : (
-            <Video
-              ref={videoRef}
-              source={{ uri: currentStory.media_url }}
-              style={styles.media}
-              resizeMode="contain"
-              shouldPlay={!isPaused}
-              isLooping={false}
-              onLoad={() => {
-                console.log('✅ [StoryViewer] Video loaded successfully');
-                setIsLoading(false);
-              }}
-              onError={(error) => {
-                console.error('❌ [StoryViewer] Video load error:', {
-                  error,
-                  url: currentStory.media_url,
-                });
-                setIsLoading(false);
-                Alert.alert('Error', 'Gagal memuat video story. URL: ' + currentStory.media_url);
-              }}
-              onPlaybackStatusUpdate={(status) => {
-                if (status.didJustFinish) {
-                  handleNext();
-                }
-              }}
-            />
-          )}
+          {/* Story Content - Only render current, previous, and next to save memory */}
+          {stories.map((story, idx) => {
+            // Memory optimization: only render current, previous and next stories
+            const isVisibleIdx = idx === currentIndex;
+            const isNear = Math.abs(idx - currentIndex) <= 1;
+            
+            if (!isNear) return null;
 
-          {/* Text Elements Overlay */}
-          {currentStory.text_elements && (() => {
-            try {
-              const textElements = typeof currentStory.text_elements === 'string'
-                ? JSON.parse(currentStory.text_elements)
-                : currentStory.text_elements;
+            return (
+              <View 
+                key={story.id || idx} 
+                style={[
+                  styles.mediaWrapper, 
+                  { 
+                    display: isVisibleIdx ? 'flex' : 'none',
+                    zIndex: isVisibleIdx ? 10 : 0,
+                  }
+                ]}
+              >
+                {story.media_type === 'image' ? (
+                  <Image
+                    source={{ uri: story.media_url }}
+                    style={styles.media}
+                    resizeMode="contain"
+                    onLoadStart={() => isVisibleIdx && setIsLoading(true)}
+                    onLoadEnd={() => isVisibleIdx && setIsLoading(false)}
+                  />
+                ) : (
+                  <Video
+                    ref={isVisibleIdx ? videoRef : null}
+                    source={{ uri: story.media_url }}
+                    style={styles.media}
+                    resizeMode="contain"
+                    shouldPlay={isVisibleIdx && !isPaused}
+                    isLooping={false}
+                    onLoad={() => isVisibleIdx && setIsLoading(false)}
+                    onPlaybackStatusUpdate={(status) => {
+                      if (isVisibleIdx && status.didJustFinish) {
+                        handleNext();
+                      }
+                    }}
+                  />
+                )}
+                
+                {/* Text Elements Overlay - only for current story */}
+                {isVisibleIdx && story.text_elements && (() => {
+                  try {
+                    const textElements = typeof story.text_elements === 'string'
+                      ? JSON.parse(story.text_elements)
+                      : story.text_elements;
 
-              console.log('📝 [StoryViewer] Rendering text elements:', textElements);
+                    return Array.isArray(textElements) && textElements.map((element, tIdx) => {
+                      const posX = element.xPercent !== undefined 
+                        ? (element.xPercent / 100) * SCREEN_WIDTH 
+                        : (element.x || SCREEN_WIDTH / 2);
+                      const posY = element.yPercent !== undefined 
+                        ? (element.yPercent / 100) * SCREEN_HEIGHT 
+                        : (element.y || SCREEN_HEIGHT / 3);
 
-              return Array.isArray(textElements) && textElements.map((element, idx) => {
-                // Use percentage-based position if available, otherwise use absolute
-                let posX, posY;
-                if (element.xPercent !== undefined && element.yPercent !== undefined) {
-                  posX = (element.xPercent / 100) * SCREEN_WIDTH;
-                  posY = (element.yPercent / 100) * SCREEN_HEIGHT;
-                } else {
-                  // Fallback to stored x,y or center
-                  posX = element.x || SCREEN_WIDTH / 2;
-                  posY = element.y || SCREEN_HEIGHT / 3;
-                }
+                      return (
+                        <View
+                          key={`text-${tIdx}`}
+                          style={[
+                            styles.textElementOverlay,
+                            { left: posX, top: posY, transform: [{ translateX: -50 }] },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.overlayText,
+                              {
+                                color: element.color || '#FFFFFF',
+                                textAlign: element.align || 'center',
+                                fontWeight: element.style === 'bold' ? 'bold' : 'normal',
+                                fontStyle: element.style === 'italic' ? 'italic' : 'normal',
+                                backgroundColor: element.bgColor || 'transparent',
+                                fontSize: element.size || 24,
+                              },
+                            ]}
+                          >
+                            {element.text}
+                          </Text>
+                        </View>
+                      );
+                    });
+                  } catch (e) { return null; }
+                })()}
 
-                return (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.textElementOverlay,
-                      {
-                        left: posX,
-                        top: posY,
-                        transform: [{ translateX: -50 }], // Center the text
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.overlayText,
-                        {
-                          color: element.color || '#FFFFFF',
-                          textAlign: element.align || 'center',
-                          fontWeight: element.style === 'bold' || element.style === 'strong' ? 'bold' : 'normal',
-                          fontStyle: element.style === 'italic' ? 'italic' : 'normal',
-                          backgroundColor: element.bgColor || element.backgroundColor || 'transparent',
-                          fontSize: element.size || 24,
-                        },
-                      ]}
-                    >
-                      {element.text}
-                    </Text>
-                  </View>
-                );
-              });
-            } catch (e) {
-              console.error('Error parsing text elements:', e);
-              return null;
-            }
-          })()}
+                {/* Sticker Elements Overlay - only for current story */}
+                {isVisibleIdx && story.stickers && (() => {
+                  try {
+                    const stickers = typeof story.stickers === 'string'
+                      ? JSON.parse(story.stickers)
+                      : story.stickers;
+
+                    return Array.isArray(stickers) && stickers.map((sticker, sIdx) => {
+                      const posX = sticker.xPercent !== undefined
+                        ? (sticker.xPercent / 100) * SCREEN_WIDTH
+                        : SCREEN_WIDTH / 2;
+                      const posY = sticker.yPercent !== undefined
+                        ? (sticker.yPercent / 100) * SCREEN_HEIGHT
+                        : SCREEN_HEIGHT / 3;
+                      
+                      return (
+                        <View
+                          key={`sticker-${sIdx}`}
+                          style={{
+                            position: 'absolute',
+                            left: posX,
+                            top: posY,
+                            transform: [{ translateX: -50 }, { scale: sticker.scale || 1 }],
+                            zIndex: 500,
+                          }}
+                        >
+                          {renderStickerOverlay(sticker, sIdx)}
+                        </View>
+                      );
+                    });
+                  } catch (e) { return null; }
+                })()}
+              </View>
+            );
+          })}
 
           {/* Top Bar - Progress Bars (per-user) */}
           <View style={styles.topBar}>
@@ -1613,13 +1630,154 @@ const StoryViewer = ({
   );
 };
 
-const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
+  const renderStickerOverlay = (sticker, idx) => {
+    const hasVoted = pollVotes[idx] !== undefined;
+    const selectedOption = pollVotes[idx];
+    const options = sticker.data?.options || [];
+
+    switch (sticker.type) {
+      case 'location':
+        return (
+          <View style={styles.stickerLocationPill}>
+            <Ionicons name="location" size={14} color="#FFFFFF" />
+            <Text style={styles.stickerLocationText}>{sticker.data?.text}</Text>
+          </View>
+        );
+      case 'mention':
+        return (
+          <TouchableOpacity
+            style={styles.stickerMentionPill}
+            activeOpacity={0.7}
+            onPress={() => {
+              setIsPaused(true);
+              Alert.alert(
+                `@${sticker.data?.text}`,
+                'Lihat profil pengguna ini?',
+                [
+                  { text: 'Tutup', style: 'cancel', onPress: () => setIsPaused(false) },
+                  { text: 'Lihat Profil', onPress: () => setIsPaused(false) },
+                ]
+              );
+            }}
+          >
+            <Text style={styles.stickerMentionText}>@{sticker.data?.text}</Text>
+          </TouchableOpacity>
+        );
+      case 'hashtag':
+        return (
+          <View style={styles.stickerHashtagPill}>
+            <Text style={styles.stickerHashtagText}>#{sticker.data?.text}</Text>
+          </View>
+        );
+      case 'poll':
+        if (isOwner) {
+          const pollResponses = stickerResponses.filter(r => r.type === 'poll_vote' && r.sticker_index === idx);
+          const totalVotes = pollResponses.length;
+          return (
+            <TouchableOpacity
+              style={styles.stickerPollCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                setIsPaused(true);
+                handleShowViewers();
+              }}
+            >
+              <Text style={styles.stickerPollQuestion}>{sticker.data?.text}</Text>
+              {options.map((opt, i) => {
+                const optionVotes = pollResponses.filter(r => r.option_index === i).length;
+                const pct = totalVotes > 0 ? Math.round((optionVotes / totalVotes) * 100) : 0;
+                return (
+                  <View key={i} style={[styles.stickerPollOptionBar, styles.stickerPollOptionBarVoted]}>
+                    <View style={styles.stickerPollOptionContent}>
+                      <Text style={styles.stickerPollOptionText}>{opt}</Text>
+                      <Text style={styles.stickerPollPercent}>{pct}%</Text>
+                    </View>
+                    <View style={[styles.stickerPollFillBar, { width: `${Math.max(pct, 5)}%` }, styles.stickerPollFillBarDefault]} />
+                  </View>
+                );
+              })}
+              <Text style={styles.stickerPollVoteInfo}>
+                {totalVotes > 0 ? `${totalVotes} suara · Detail` : 'Belum ada suara'}
+              </Text>
+            </TouchableOpacity>
+          );
+        }
+        return (
+          <View style={styles.stickerPollCard}>
+            <Text style={styles.stickerPollQuestion}>{sticker.data?.text}</Text>
+            {options.map((opt, i) => {
+              const isSelected = selectedOption === i;
+              const votePercent = hasVoted ? (isSelected ? 65 : 35) : 0;
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.stickerPollOptionBar, hasVoted && styles.stickerPollOptionBarVoted, isSelected && styles.stickerPollOptionBarSelected]}
+                  activeOpacity={hasVoted ? 1 : 0.7}
+                  onPress={async () => {
+                    if (!hasVoted) {
+                      setPollVotes(prev => ({ ...prev, [idx]: i }));
+                      try { await apiService.submitPollVote(currentStory.id, idx, i, opt); } catch (err) {}
+                    }
+                  }}
+                >
+                  <View style={styles.stickerPollOptionContent}>
+                    <Text style={[styles.stickerPollOptionText, isSelected && styles.stickerPollOptionTextSelected]}>{opt}</Text>
+                    {hasVoted && <Text style={[styles.stickerPollPercent, isSelected && styles.stickerPollPercentSelected]}>{votePercent}%</Text>}
+                  </View>
+                  {hasVoted && <View style={[styles.stickerPollFillBar, { width: `${votePercent}%` }, isSelected ? styles.stickerPollFillBarSelected : styles.stickerPollFillBarDefault]} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        );
+      case 'question':
+        if (isOwner) {
+          const questionResponses = stickerResponses.filter(r => r.type === 'question_answer' && r.sticker_index === idx);
+          return (
+            <TouchableOpacity style={styles.stickerQuestionBox} activeOpacity={0.7} onPress={() => { setIsPaused(true); handleShowViewers(); }}>
+              <Text style={styles.stickerQuestionLabel}>{questionResponses.length > 0 ? `${questionResponses.length} jawaban` : 'Belum ada jawaban'}</Text>
+              <View style={styles.stickerQuestionContent}><Text style={styles.stickerQuestionText}>{sticker.data?.text}</Text></View>
+              <View style={styles.stickerQuestionInputHint}><Text style={styles.stickerQuestionInputHintText}>Ketuk untuk lihat detail</Text></View>
+            </TouchableOpacity>
+          );
+        }
+        return (
+          <TouchableOpacity
+            style={styles.stickerQuestionBox}
+            activeOpacity={0.8}
+            onPress={() => {
+              if (!questionSent[idx]) {
+                setIsPaused(true);
+                setActiveQuestionIdx(idx);
+                setActiveQuestionText(sticker.data?.text || '');
+                setQuestionAnswer('');
+                setShowQuestionModal(true);
+              }
+            }}
+          >
+            <Text style={styles.stickerQuestionLabel}>{questionSent[idx] ? 'Jawaban terkirim!' : 'Ketuk untuk menjawab'}</Text>
+            <View style={styles.stickerQuestionContent}><Text style={styles.stickerQuestionText}>{sticker.data?.text}</Text></View>
+            {!questionSent[idx] && <View style={styles.stickerQuestionInputHint}><Text style={styles.stickerQuestionInputHintText}>Tulis jawaban...</Text></View>}
+          </TouchableOpacity>
+        );
+      case 'image':
+        return sticker.data?.imageUri ? (
+          <Image source={{ uri: sticker.data.imageUri }} style={{ width: 120, height: 120, borderRadius: 12 }} resizeMode="contain" />
+        ) : null;
+      default:
+        return null;
+    }
+  };
+
+  const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
   },
-  contentContainer: {
-    flex: 1,
+  mediaWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
   loadingOverlay: {
     position: 'absolute',

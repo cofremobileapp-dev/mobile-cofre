@@ -6,11 +6,16 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  StatusBar as RNStatusBar,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
+
 const StoryCameraScreen = ({ navigation, route }) => {
+  const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState('back');
   const [flash, setFlash] = useState('off');
@@ -178,84 +183,87 @@ const StoryCameraScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing={facing}
-        flash={flash}
-      >
-        {/* Top Bar */}
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="close" size={32} color="#FFFFFF" />
-          </TouchableOpacity>
+      <StatusBar style="light" />
+      {isFocused && (
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          flash={flash}
+        >
+          {/* Top Bar */}
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="close" size={32} color="#FFFFFF" />
+            </TouchableOpacity>
 
-          <View style={styles.topRight}>
-            <TouchableOpacity style={styles.iconButton} onPress={toggleFlash}>
-              <Ionicons name={getFlashIcon()} size={28} color="#FFFFFF" />
+            <View style={styles.topRight}>
+              <TouchableOpacity style={styles.iconButton} onPress={toggleFlash}>
+                <Ionicons name={getFlashIcon()} size={28} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Bottom Bar */}
+          <View style={styles.bottomBar}>
+            {/* Gallery Button */}
+            <TouchableOpacity
+              style={styles.galleryButton}
+              onPress={pickFromGallery}
+            >
+              <Ionicons name="images" size={32} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            {/* Capture Button - Tap for Photo, Hold for Video */}
+            <TouchableOpacity
+              style={[
+                styles.captureButton,
+                isRecording && styles.captureButtonRecording
+              ]}
+              onPress={takePicture}
+              onLongPress={startRecording}
+              onPressOut={stopRecording}
+              activeOpacity={0.7}
+              delayLongPress={200}
+            >
+              <View style={[
+                styles.captureButtonInner,
+                isRecording && styles.captureButtonInnerRecording
+              ]} />
+            </TouchableOpacity>
+
+            {/* Flip Camera Button */}
+            <TouchableOpacity
+              style={styles.flipButton}
+              onPress={toggleCameraFacing}
+            >
+              <Ionicons name="camera-reverse" size={32} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Bottom Bar */}
-        <View style={styles.bottomBar}>
-          {/* Gallery Button */}
-          <TouchableOpacity
-            style={styles.galleryButton}
-            onPress={pickFromGallery}
-          >
-            <Ionicons name="images" size={32} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Recording Timer */}
+          {isRecording && (
+            <View style={styles.recordingContainer}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>
+                {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')} / 0:15
+              </Text>
+            </View>
+          )}
 
-          {/* Capture Button - Tap for Photo, Hold for Video */}
-          <TouchableOpacity
-            style={[
-              styles.captureButton,
-              isRecording && styles.captureButtonRecording
-            ]}
-            onPress={takePicture}
-            onLongPress={startRecording}
-            onPressOut={stopRecording}
-            activeOpacity={0.7}
-            delayLongPress={200}
-          >
-            <View style={[
-              styles.captureButtonInner,
-              isRecording && styles.captureButtonInnerRecording
-            ]} />
-          </TouchableOpacity>
-
-          {/* Flip Camera Button */}
-          <TouchableOpacity
-            style={styles.flipButton}
-            onPress={toggleCameraFacing}
-          >
-            <Ionicons name="camera-reverse" size={32} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Recording Timer */}
-        {isRecording && (
-          <View style={styles.recordingContainer}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>
-              {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')} / 0:15
-            </Text>
-          </View>
-        )}
-
-        {/* Instruction Text */}
-        {!isRecording && (
-          <View style={styles.instructionContainer}>
-            <Text style={styles.instructionText}>
-              Tap for photo • Hold for video
-            </Text>
-          </View>
-        )}
-      </CameraView>
+          {/* Instruction Text */}
+          {!isRecording && (
+            <View style={styles.instructionContainer}>
+              <Text style={styles.instructionText}>
+                Tap for photo • Hold for video
+              </Text>
+            </View>
+          )}
+        </CameraView>
+      )}
     </View>
   );
 };

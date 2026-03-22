@@ -95,7 +95,7 @@ function AppContent() {
   return (
     <>
       <AppNavigator ref={navigationRef} onReady={onNavigationReady} />
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </>
   );
 }

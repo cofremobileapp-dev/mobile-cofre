@@ -140,28 +140,70 @@ export const StoriesProvider = ({ children }) => {
         try {
           let stickerImageIndex = 0;
           const stickersMeta = options.stickers.map((sticker) => {
-            if (sticker.type === 'image' && sticker.data?.imageUri && typeof sticker.data.imageUri === 'string' && sticker.data.imageUri.startsWith('file://')) {
-              const idx = stickerImageIndex++;
-              const stickerMime = getMimeType(sticker.data.imageUri, 'image');
-              formData.append(`sticker_images[${idx}]`, {
-                uri: sticker.data.imageUri,
-                type: stickerMime.mimeType,
-                name: `sticker_${Date.now()}_${idx}.${stickerMime.extension}`,
-              });
-              console.log('📤 [Stories] Adding image sticker file:', idx);
-              return { ...sticker, data: { ...sticker.data, imageUri: `__STICKER_IMAGE_${idx}__` } };
+            // Defensive: ensure sticker has required fields
+            if (!sticker || typeof sticker !== 'object' || !sticker.type) {
+              return { type: 'unknown', data: {}, xPercent: 50, yPercent: 50, scale: 1 };
             }
-            return sticker;
-          });
-          const stickersJson = JSON.stringify(stickersMeta);
-          console.log('📤 [Stories] Stickers JSON length:', stickersJson.length);
-          formData.append('stickers', stickersJson);
+
+            const data = sticker.data || {};
+            const imageUri = data.imageUri;
+
+            // Handle image stickers - support both file:// and content:// (Android)
+            if (sticker.type === 'image' && imageUri && typeof imageUri === 'string' && 
+                (imageUri.startsWith('file://') || imageUri.startsWith('content://') || imageUri.startsWith('ph://'))) {
+              
+              const idx = stickerImageIndex++;
+              const stickerMime = getMimeType(imageUri, 'image');
+              
+              // Ensure we have valid parts for FormData
+              const filePart = {
+                uri: imageUri,
+                type: stickerMime.mimeType || 'image/jpeg',
+                name: `sticker_${Date.now()}_${idx}.${stickerMime.extension || 'jpg'}`,
+              };
+
+              console.log(`📤 [Stories] Appending image sticker [${idx}]:`, filePart.name);
+              formData.append(`sticker_images[${idx}]`, filePart);
+              
+              // Return sticker meta with placeholder for the URL
+              return { 
+                ...sticker, 
+                data: { ...data, imageUri: `__STICKER_IMAGE_${idx}__` } 
+              };
+            }
+
+            // For non-image stickers (poll, location, etc.), ensure data is serializable
+            try {
+              const safeData = JSON.parse(JSON.stringify(data));
+              return { ...sticker, data: safeData };
+            } catch (dataErr) {
+              console.warn('📤 [Stories] Sticker data not serializable, using fallback text');
+              return { ...sticker, data: { text: String(data.text || '') } };
+            }
+          }).filter(s => s && s.type !== 'unknown');
+
+          if (stickersMeta.length > 0) {
+            const stickersJson = JSON.stringify(stickersMeta);
+            console.log('📤 [Stories] Stickers JSON length:', stickersJson.length);
+            formData.append('stickers', stickersJson);
+          }
         } catch (stickerErr) {
-          console.error('📤 [Stories] Error serializing stickers, skipping:', stickerErr.message);
+          console.error('📤 [Stories] Critical sticker processing error:', stickerErr.message);
+          // Continue upload without stickers rather than crashing the whole process
         }
       }
 
-      if (options.text_elements) formData.append('text_elements', options.text_elements);
+      if (options.text_elements) {
+        try {
+          // Validate text_elements is valid JSON before appending
+          if (typeof options.text_elements === 'string') {
+            JSON.parse(options.text_elements); // Validate
+            formData.append('text_elements', options.text_elements);
+          }
+        } catch (textErr) {
+          console.error('📤 [Stories] Invalid text_elements JSON, skipping:', textErr.message);
+        }
+      }
       if (options.filter) formData.append('filter', options.filter);
       if (options.allowResharing !== undefined) {
         formData.append('allow_resharing', options.allowResharing ? '1' : '0');
@@ -179,13 +221,16 @@ export const StoriesProvider = ({ children }) => {
       });
 
       if (responseData?.success) {
-        // Refresh stories in background - don't let this block or crash
-        try {
-          await fetchStories();
-          await fetchMyStories();
-        } catch (refreshErr) {
-          console.warn('📤 [Stories] Story refresh after upload failed (non-fatal):', refreshErr.message);
-        }
+        // Refresh stories in background - fire and forget to prevent blocking
+        // Using Promise-based approach so refresh errors never propagate to caller
+        Promise.resolve().then(async () => {
+          try {
+            await fetchStories();
+            await fetchMyStories();
+          } catch (refreshErr) {
+            console.warn('📤 [Stories] Story refresh after upload failed (non-fatal):', refreshErr.message);
+          }
+        });
         return responseData.story;
       } else {
         throw new Error(responseData?.message || 'Upload failed');

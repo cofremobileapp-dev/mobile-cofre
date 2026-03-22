@@ -20,7 +20,7 @@ import CommentModal from './CommentModal';
 import ShareModal from './ShareModal';
 import { formatPrice } from '../utils/formatUtils';
 
-const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, currentIndex, totalVideos, onVideoError, isScreenFocused }) => {
+const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, currentIndex, totalVideos, onVideoError, isScreenFocused, videoHeight }) => {
   const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
   const { t } = useLanguage();
 
@@ -61,7 +61,9 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   const hasRecordedView = useRef(false);
   const hasFetchedTags = useRef(false);
 
-  const videoItemStyles = useMemo(() => createVideoItemStyles(SCREEN_HEIGHT, SCREEN_WIDTH), [SCREEN_HEIGHT, SCREEN_WIDTH]);
+  // Use passed videoHeight or fallback to calculated SCREEN_HEIGHT - TabBarHeight
+  const finalVideoHeight = videoHeight || (SCREEN_HEIGHT - 60);
+  const videoItemStyles = useMemo(() => createVideoItemStyles(finalVideoHeight, SCREEN_WIDTH), [finalVideoHeight, SCREEN_WIDTH]);
 
   // Control playback with proper error handling
   useEffect(() => {
@@ -510,25 +512,22 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
         )}
       </TouchableOpacity>
 
-      {/* Right Side Actions */}
+      {/* Right Side Actions - Avatar at top, then Like, Comment, Repost, Share, Bookmark, Menu */}
       <View style={videoItemStyles.rightActions}>
-        {/* Creator Avatar with Follow Button */}
+        {/* Creator Avatar with Follow Button (NOW AT TOP) */}
         <View style={videoItemStyles.avatarContainer}>
           <TouchableOpacity
             onPress={() => {
               if (item.user?.id) {
                 if (item.user.id === currentUserId) {
-                  // Navigate to own profile (Profile tab)
                   navigation.navigate('Profile');
                 } else {
-                  // Navigate to other user's profile
                   navigation.navigate('OtherUserProfile', { userId: item.user.id });
                 }
               }
             }}
           >
             {(() => {
-              // Use current user's avatar if this is their video (always fresh from AuthContext)
               const avatarUrl = item.user?.id === currentUserId && currentUser?.avatar_url
                 ? currentUser.avatar_url
                 : item.user?.avatar_url;
@@ -570,7 +569,7 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
         >
           <Ionicons
             name={isLiked ? "heart" : "heart-outline"}
-            size={30}
+            size={32}
             color={isLiked ? "#FF3B5C" : "#FFFFFF"}
           />
           <Text style={videoItemStyles.actionText}>
@@ -583,20 +582,30 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
           style={videoItemStyles.actionButton}
           onPress={() => setShowComments(true)}
         >
-          <Ionicons name="chatbubble-outline" size={28} color="#FFFFFF" />
+          <Ionicons name="chatbubble-outline" size={30} color="#FFFFFF" />
           <Text style={videoItemStyles.actionText}>
             {commentsCount > 0 ? (commentsCount >= 1000 ? `${(commentsCount / 1000).toFixed(1)}K` : commentsCount) : '0'}
           </Text>
         </TouchableOpacity>
 
-        {/* Recipe/Menu Info Button */}
+        {/* Repost Button */}
         <TouchableOpacity
-          style={videoItemStyles.menuActionButton}
-          onPress={() => setShowMenu(!showMenu)}
+          style={videoItemStyles.actionButton}
+          onPress={handleRepost}
         >
-          <View style={videoItemStyles.menuIconContainer}>
-            <Ionicons name="restaurant" size={22} color="#FFFFFF" />
-          </View>
+          <Ionicons
+            name={isReposted ? "repeat" : "repeat-outline"}
+            size={30}
+            color={isReposted ? "#3B82F6" : "#FFFFFF"}
+          />
+        </TouchableOpacity>
+
+        {/* Share Button */}
+        <TouchableOpacity
+          style={videoItemStyles.actionButton}
+          onPress={() => setShowShareModal(true)}
+        >
+          <Ionicons name="share-social-outline" size={28} color="#FFFFFF" />
         </TouchableOpacity>
 
         {/* Bookmark Button */}
@@ -607,36 +616,23 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
         >
           <Ionicons
             name={isBookmarked ? "bookmark" : "bookmark-outline"}
-            size={28}
+            size={30}
             color={isBookmarked ? "#FFD700" : "#FFFFFF"}
           />
         </TouchableOpacity>
 
-        {/* Repost Button */}
+        {/* Recipe/Menu Info Button */}
         <TouchableOpacity
-          style={videoItemStyles.actionButton}
-          onPress={handleRepost}
+          style={videoItemStyles.menuActionButton}
+          onPress={() => setShowMenu(!showMenu)}
         >
-          <Ionicons
-            name={isReposted ? "repeat" : "repeat-outline"}
-            size={28}
-            color={isReposted ? "#3B82F6" : "#FFFFFF"}
-          />
-          {isReposted && (
-            <Text style={videoItemStyles.repostedLabel}>{t('reposted')}</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Share Button - opens ShareModal (merged with more options, like TikTok) */}
-        <TouchableOpacity
-          style={videoItemStyles.actionButton}
-          onPress={() => setShowShareModal(true)}
-        >
-          <Ionicons name="share-social-outline" size={26} color="#FFFFFF" />
+          <View style={videoItemStyles.menuIconContainer}>
+            <Ionicons name="restaurant" size={20} color="#FFFFFF" />
+          </View>
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Info */}
+      {/* Bottom Info - Positioned to the left of the bottom avatar */}
       <View style={videoItemStyles.bottomInfo}>
         {/* Creator Name with Badge */}
         <View style={videoItemComponentStyles.creatorNameRow}>
@@ -866,9 +862,9 @@ const VideoItem = ({ item, isActive, currentUserId, currentUser, navigation, cur
   );
 };
 
-const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create({
+const createVideoItemStyles = (finalVideoHeight, SCREEN_WIDTH) => StyleSheet.create({
   videoContainer: {
-    height: SCREEN_HEIGHT,
+    height: finalVideoHeight,
     width: SCREEN_WIDTH,
     backgroundColor: '#000',
   },
@@ -879,7 +875,7 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
     bottom: 0,
     right: 0,
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    height: finalVideoHeight,
   },
   videoTouchable: {
     position: 'absolute',
@@ -923,23 +919,23 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
   rightActions: {
     position: 'absolute',
     right: 14,
-    bottom: 180,
+    bottom: 20, // Now aligned with bottomInfo
     alignItems: 'center',
-    gap: 22,
+    gap: 18, // Compact spacing like Reels
   },
   avatarContainer: {
     alignItems: 'center',
-    marginBottom: 0,
+    marginTop: 4, // Add some breathing room from the button above
     position: 'relative',
   },
   avatar: {
-    width: 44,
-    height: 44,
+    width: 40, // Slightly smaller Reels-style avatar
+    height: 40,
     borderRadius: 8,
     backgroundColor: '#EDE8D0',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2.5,
+    borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
   avatarPlaceholder: {
@@ -947,24 +943,24 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   followPlusButton: {
     position: 'absolute',
-    bottom: -6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    bottom: -5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#FF3B5C',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#000',
   },
   actionButton: {
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
     paddingVertical: 2,
   },
   repostedLabel: {
@@ -977,8 +973,8 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
   },
   actionText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13, // Slightly larger for readability
+    fontWeight: '600',
     textShadowColor: 'rgba(0, 0, 0, 0.85)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -989,9 +985,9 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
     paddingVertical: 2,
   },
   menuIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38, // Slightly smaller Reels-style
+    height: 38,
+    borderRadius: 8, // Changed to match avatar style
     backgroundColor: '#06402B',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1000,19 +996,21 @@ const createVideoItemStyles = (SCREEN_HEIGHT, SCREEN_WIDTH) => StyleSheet.create
     shadowOpacity: 0.4,
     shadowRadius: 5,
     elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   bottomInfo: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 25,
     left: 14,
-    right: 90,
-    maxHeight: 140,
+    right: 70, // More room for labels
+    maxHeight: 160,
   },
   recipeModalContainer: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: SCREEN_HEIGHT * 0.75,
+    maxHeight: finalVideoHeight * 0.75, // Use finalVideoHeight
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,

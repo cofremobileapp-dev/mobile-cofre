@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/ApiService';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +27,18 @@ const HomeScreen = () => {
   const { t } = useLanguage();
   const navigation = useNavigation();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const { height: SCREEN_HEIGHT } = useWindowDimensions();
+
+  // Tab bar height is 60 as defined in AppNavigator.js
+  const TAB_BAR_HEIGHT = 60;
+  
+  // Calculate the actual available height for the video item
+  // We only subtract the tab bar height. React Navigation handles the safe area within the TabBar itself.
+  const videoHeight = useMemo(() => {
+    return SCREEN_HEIGHT - TAB_BAR_HEIGHT;
+  }, [SCREEN_HEIGHT]);
+
   const [videos, setVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -262,12 +274,13 @@ const HomeScreen = () => {
             totalVideos={videos.length}
             onVideoError={handleVideoError}
             isScreenFocused={isScreenFocused}
+            videoHeight={videoHeight}
           />
         )}
         keyExtractor={(item) => item.id.toString()}
         pagingEnabled
         showsVerticalScrollIndicator={false}
-        snapToInterval={SCREEN_HEIGHT}
+        snapToInterval={videoHeight}
         snapToAlignment="start"
         decelerationRate="fast"
         onViewableItemsChanged={onViewableItemsChanged}

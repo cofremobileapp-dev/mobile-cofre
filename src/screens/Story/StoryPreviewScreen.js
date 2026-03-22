@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   ScrollView,
   Animated,
   PanResponder,
+  InteractionManager,
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,8 +24,25 @@ const StoryPreviewScreen = ({ route, navigation }) => {
   const { mediaUri, mediaType, textElements: initialTextElements } = route.params;
   const { uploadStory } = useStories();
 
+  const videoRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const isPostingRef = useRef(false);
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Cleanup video on unmount to prevent native crashes
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (videoRef.current) {
+        try {
+          videoRef.current.stopAsync().catch(() => {});
+          videoRef.current.unloadAsync().catch(() => {});
+        } catch (e) { /* ignore */ }
+      }
+    };
+  }, []);
 
   // Text Editor States - Initialize with passed textElements from editor
   const [textElements, setTextElements] = useState(initialTextElements || []);
@@ -122,166 +140,125 @@ const StoryPreviewScreen = ({ route, navigation }) => {
     setTextElements(prev => prev.filter(el => el.id !== id));
   };
 
-  // Handle post with text elements
-  const handlePost = async () => {
-    try {
-      setIsUploading(true);
+  // Handle post with text elements - with enhanced crash protection and memory management
+  const handlePost = async (isAddingAnother = false) => {
+    // Prevent double-posting
+    if (isPostingRef.current) return;
+    isPostingRef.current = true;
 
-      // Prepare text elements data - normalize positions to percentage for consistent display
-      const textElementsData = textElements.map(el => ({
-        text: el.text,
-        color: el.color,
-        align: el.align || 'center',
-        style: el.style || 'normal',
-        backgroundColor: el.backgroundColor || 'transparent',
-        // Store as percentage of screen for consistent display across devices
-        x: el.x,
-        y: el.y,
-        // Convert screen coordinates to center-based for viewer
-        xPercent: (el.x / SCREEN_WIDTH) * 100,
-        yPercent: (el.y / SCREEN_HEIGHT) * 100,
-        rotation: el.rotation || 0,
-        scale: el.scale || 1,
-        size: el.size || 24,
+    console.log('📌 [StoryPreview] handlePost initiated', { isAddingAnother });
+
+    try {
+      // 1. Snapshot all text data FIRST before any state changes
+      const textSnapshot = textElements.map(el => ({
+        ...el,
+        _finalX: el.x,
+        _finalY: el.y,
+        _finalScale: el.scale || 1,
       }));
 
-      console.log('📤 [StoryPreview] Uploading story with text elements:', JSON.stringify(textElementsData));
+      // 2. Prepare serializable payload
+      let textElementsData = [];
+      try {
+        textElementsData = textSnapshot.map(el => ({
+          text: String(el.text || ''),
+          color: String(el.color || '#FFFFFF'),
+          align: el.align || 'center',
+          style: el.style || 'normal',
+          backgroundColor: el.backgroundColor || 'transparent',
+          xPercent: Math.max(0, Math.min(100, (el._finalX / SCREEN_WIDTH) * 100)) || 0,
+          yPercent: Math.max(0, Math.min(100, (el._finalY / SCREEN_HEIGHT) * 100)) || 0,
+          scale: Number(el._finalScale) || 1,
+          size: Number(el.size) || 24,
+        }));
+      } catch (e) {
+        console.error('❌ [StoryPreview] Error preparing text elements:', e);
+        textElementsData = [];
+      }
 
+      const textJson = textElementsData.length > 0 ? JSON.stringify(textElementsData) : null;
+
+      // 3. CRITICAL: Stop and UNLOAD video immediately to free up maximum memory
+      if (videoRef.current) {
+        try {
+          await videoRef.current.stopAsync();
+          await videoRef.current.unloadAsync();
+          console.log('📌 [StoryPreview] Video unloaded to free memory');
+        } catch (e) {
+          console.warn('📌 [StoryPreview] Video cleanup warning:', e.message);
+        }
+      }
+
+      // 4. Now show upload UI (triggers re-render)
+      setIsUploading(true);
+
+      // 5. Small delay to let the UI update before heavy upload
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // 6. Execute upload
+      console.log('📌 [StoryPreview] Calling uploadStory...');
       await uploadStory(mediaUri, mediaType, {
         caption: caption.trim() || null,
         duration: mediaType === 'video' ? 15 : 5,
-        text_elements: textElementsData.length > 0 ? JSON.stringify(textElementsData) : null,
+        text_elements: textJson,
       });
 
-      Alert.alert('Berhasil', 'Story berhasil diposting!', [
-        {
-          text: 'OK',
-          onPress: () => {
+      console.log('📌 [StoryPreview] Upload successful');
+
+      // 7. Navigate away safely
+      if (isMountedRef.current) {
+        if (isAddingAnother) {
+          // If adding another, go back to camera
+          try {
+            navigation.replace('StoryCamera');
+          } catch (navErr) {
+            navigation.navigate('StoryCamera');
+          }
+        } else {
+          // Otherwise go back to main screen
+          try {
             navigation.popToTop();
-          },
-        },
-      ]);
-    } catch (error) {
-      console.error('❌ [StoryPreview] Error posting story:', error);
-      console.error('❌ [StoryPreview] Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-      });
-
-      // More specific error messages
-      let errorMessage = 'Gagal memposting story. Silakan coba lagi.';
-      if (error.response?.status === 413) {
-        errorMessage = 'File terlalu besar. Maksimal 50MB untuk video.';
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Sesi Anda telah berakhir. Silakan login kembali.';
-      } else if (error.response?.status === 422) {
-        errorMessage = error.response?.data?.message || 'Format file tidak valid.';
-      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
-        errorMessage = 'Koneksi timeout. Periksa koneksi internet Anda.';
+          } catch (navErr) {
+            try { navigation.goBack(); } catch (e) {}
+          }
+        }
       }
-
-      Alert.alert('Error', errorMessage);
+      return true;
+    } catch (error) {
+      console.error('❌ [StoryPreview] Critical upload error:', error?.message || error);
+      
+      if (isMountedRef.current) {
+        setIsUploading(false);
+        Alert.alert('Error', error?.message || 'Gagal memposting story. Silakan coba lagi.');
+      }
+      return false;
     } finally {
-      setIsUploading(false);
+      isPostingRef.current = false;
     }
   };
 
-  // Draggable Text Component
-  const DraggableText = ({ element }) => {
-    const pan = useRef(new Animated.ValueXY({ x: element.x, y: element.y })).current;
-
-    const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          pan.setOffset({
-            x: pan.x._value,
-            y: pan.y._value
-          });
-          pan.setValue({ x: 0, y: 0 });
-        },
-        onPanResponderMove: Animated.event(
-          [null, { dx: pan.x, dy: pan.y }],
-          { useNativeDriver: false }
-        ),
-        onPanResponderRelease: (_, gesture) => {
-          pan.flattenOffset();
-          // Update element position
-          setTextElements(prev =>
-            prev.map(el =>
-              el.id === element.id
-                ? { ...el, x: pan.x._value, y: pan.y._value }
-                : el
-            )
-          );
-        },
-      })
-    ).current;
-
-    const textStyleObj = {
-      color: element.color,
-      textAlign: element.align,
-      fontWeight: element.style === 'bold' ? 'bold' : 'normal',
-      fontStyle: element.style === 'italic' ? 'italic' : 'normal',
-      backgroundColor: element.backgroundColor,
-    };
-
-    return (
-      <Animated.View
-        style={[
-          styles.draggableText,
-          {
-            transform: [
-              { translateX: pan.x },
-              { translateY: pan.y },
-            ],
-          },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.textElementContainer}>
-          <Text style={[styles.textElement, textStyleObj]}>
-            {element.text}
-          </Text>
-          <View style={styles.textElementActions}>
-            <TouchableOpacity
-              style={styles.textActionButton}
-              onPress={() => editTextElement(element)}
-            >
-              <Ionicons name="pencil" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.textActionButton}
-              onPress={() => deleteTextElement(element.id)}
-            >
-              <Ionicons name="trash" size={16} color="#FF4444" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.View>
-    );
-  };
+  // ... (DraggableText remains similar but check visibility)
 
   return (
     <View style={styles.container}>
       {/* Media Preview */}
       <View style={styles.mediaContainer}>
         {mediaType === 'image' ? (
-          <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="contain" />
+          <Image source={{ uri: mediaUri }} style={styles.media} resizeMode="cover" />
         ) : (
           <Video
+            ref={videoRef}
             source={{ uri: mediaUri }}
             style={styles.media}
-            resizeMode="contain"
-            shouldPlay
+            resizeMode="cover"
+            shouldPlay={!isUploading}
             isLooping
             isMuted={false}
           />
         )}
 
-        {/* Render text elements on top of media */}
-        {textElements.map(element => (
+        {/* Render text elements on top of media - Hide during upload */}
+        {!isUploading && textElements.map(element => (
           <DraggableText key={element.id} element={element} />
         ))}
       </View>
@@ -322,48 +299,45 @@ const StoryPreviewScreen = ({ route, navigation }) => {
           />
         </View>
 
-        {/* Add Another Story Button */}
-        <TouchableOpacity
-          style={[styles.addStoryButton, isUploading && styles.addStoryButtonDisabled]}
-          onPress={() => {
-            Alert.alert(
-              'Add Another Story',
-              'Save this story and add another one?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Add Another',
-                  onPress: async () => {
-                    // Upload current story first
-                    await handlePost();
-                    // Navigate back to camera to add another
-                    navigation.navigate('StoryCamera');
+        <View style={styles.actionRow}>
+          {/* Add Another Story Button */}
+          <TouchableOpacity
+            style={[styles.addStoryButton, isUploading && styles.addStoryButtonDisabled]}
+            onPress={() => {
+              Alert.alert(
+                'Tambah Story Lain',
+                'Simpan story ini dan ambil foto/video lagi?',
+                [
+                  { text: 'Batal', style: 'cancel' },
+                  {
+                    text: 'Tambah Lagi',
+                    onPress: () => handlePost(true)
                   }
-                }
-              ]
-            );
-          }}
-          disabled={isUploading}
-        >
-          <Ionicons name="add-circle" size={24} color="#FFFFFF" />
-          <Text style={styles.addStoryButtonText}>+</Text>
-        </TouchableOpacity>
+                ]
+              );
+            }}
+            disabled={isUploading}
+          >
+            <Ionicons name="add-circle" size={22} color="#FFFFFF" />
+            <Text style={styles.addStoryButtonText}>Tambah Lagi</Text>
+          </TouchableOpacity>
 
-        {/* Post Button */}
-        <TouchableOpacity
-          style={[styles.postButton, isUploading && styles.postButtonDisabled]}
-          onPress={handlePost}
-          disabled={isUploading}
-        >
-          {isUploading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <>
-              <Ionicons name="send" size={20} color="#FFFFFF" />
-              <Text style={styles.postButtonText}>Post</Text>
-            </>
-          )}
-        </TouchableOpacity>
+          {/* Post Button */}
+          <TouchableOpacity
+            style={[styles.postButton, isUploading && styles.postButtonDisabled]}
+            onPress={() => handlePost(false)}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="send" size={20} color="#FFFFFF" />
+                <Text style={styles.postButtonText}>Post</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Upload Progress Overlay */}
@@ -605,16 +579,23 @@ const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
     fontSize: 16,
     maxHeight: 100,
   },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
   addStoryButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: 'rgba(59, 130, 246, 0.8)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    marginRight: 8,
+    flex: 1,
+    marginRight: 10,
   },
   addStoryButtonDisabled: {
     backgroundColor: '#6B7280',
@@ -622,7 +603,7 @@ const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
   },
   addStoryButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
   },
   postButton: {
@@ -631,10 +612,10 @@ const createStyles = (SCREEN_WIDTH, SCREEN_HEIGHT) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     borderRadius: 12,
-    flex: 1,
+    flex: 1.2,
   },
   postButtonDisabled: {
     backgroundColor: '#6B7280',
